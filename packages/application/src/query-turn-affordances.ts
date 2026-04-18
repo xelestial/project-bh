@@ -1,0 +1,331 @@
+import {
+  DomainError,
+  endTurn,
+  moveActivePlayer,
+  movePosition,
+  openCarriedTreasure,
+  rotateTiles,
+  throwTile,
+  useSpecialCard,
+  type Direction,
+  type MatchState,
+  type PlayerId,
+  type Position,
+  type SpecialCardType,
+  type TurnStage
+} from "../../domain/src/index.ts";
+
+const CARDINAL_DIRECTIONS: readonly Direction[] = ["north", "east", "south", "west"];
+const ROTATION_DIRECTIONS = ["clockwise", "counterclockwise"] as const;
+const RECTANGLE_ORIENTATIONS = ["horizontal", "vertical"] as const;
+const SPECIAL_CARD_TYPES = [
+  "coldBomb",
+  "flameBomb",
+  "electricBomb",
+  "hammer5",
+  "hammer6",
+  "fence"
+] as const satisfies readonly SpecialCardType[];
+
+export interface TurnAffordances {
+  readonly active: boolean;
+  readonly stage: TurnStage | null;
+  readonly mandatoryMoveTargets: readonly Position[];
+  readonly secondaryMoveTargets: readonly Position[];
+  readonly availableSecondaryActions: {
+    readonly move: boolean;
+    readonly throwTile: boolean;
+    readonly rotateTiles: boolean;
+    readonly specialCard: boolean;
+    readonly openTreasure: boolean;
+    readonly endTurn: boolean;
+  };
+  readonly availableSpecialCards: Readonly<Record<SpecialCardType, boolean>>;
+}
+
+function tryCommand(run: () => void): boolean {
+  try {
+    run();
+    return true;
+  } catch (error) {
+    if (error instanceof DomainError) {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+function createDisabledSpecialCardRecord(): Readonly<Record<SpecialCardType, boolean>> {
+  return Object.fromEntries(
+    SPECIAL_CARD_TYPES.map((cardType) => [cardType, false])
+  ) as Readonly<Record<SpecialCardType, boolean>>;
+}
+
+function createInactiveAffordances(): TurnAffordances {
+  return {
+    active: false,
+    stage: null,
+    mandatoryMoveTargets: [],
+    secondaryMoveTargets: [],
+    availableSecondaryActions: {
+      move: false,
+      throwTile: false,
+      rotateTiles: false,
+      specialCard: false,
+      openTreasure: false,
+      endTurn: false
+    },
+    availableSpecialCards: createDisabledSpecialCardRecord()
+  };
+}
+
+function listBoardPositions(match: MatchState): readonly Position[] {
+  const positions: Position[] = [];
+
+  for (let y = 0; y < match.board.height; y += 1) {
+    for (let x = 0; x < match.board.width; x += 1) {
+      positions.push({ x, y });
+    }
+  }
+
+  return positions;
+}
+
+function collectLegalMoveTargets(
+  match: MatchState,
+  playerId: PlayerId
+): readonly Position[] {
+  const player = match.players[playerId];
+
+  if (!player) {
+    return [];
+  }
+
+  return CARDINAL_DIRECTIONS.flatMap((direction) => {
+    if (!tryCommand(() => moveActivePlayer(match, playerId, direction))) {
+      return [];
+    }
+
+    return [movePosition(player.position, direction)];
+  });
+}
+
+function hasAnyLegalThrow(match: MatchState, playerId: PlayerId): boolean {
+  const player = match.players[playerId];
+
+  if (!player) {
+    return false;
+  }
+
+  for (const sourceDirection of CARDINAL_DIRECTIONS) {
+    const source = movePosition(player.position, sourceDirection);
+
+    for (const throwDirection of CARDINAL_DIRECTIONS) {
+      for (let distance = 1; distance <= 3; distance += 1) {
+        const target = {
+          x: source.x + (throwDirection === "east" ? distance : throwDirection === "west" ? -distance : 0),
+          y: source.y + (throwDirection === "south" ? distance : throwDirection === "north" ? -distance : 0)
+        };
+
+        if (
+          tryCommand(() =>
+            throwTile(match, {
+              playerId,
+              source,
+              target
+            })
+          )
+        ) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+function hasAnyLegalNormalRotation(match: MatchState, playerId: PlayerId): boolean {
+  for (const position of listBoardPositions(match)) {
+    for (const direction of ROTATION_DIRECTIONS) {
+      if (
+        tryCommand(() =>
+          rotateTiles(match, {
+            playerId,
+            selection: {
+              kind: "square2",
+              origin: position
+            },
+            direction
+          })
+        )
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function canUseSpecialCardType(
+  match: MatchState,
+  playerId: PlayerId,
+  cardType: SpecialCardType
+): boolean {
+  if (cardType === "flameBomb" || cardType === "electricBomb") {
+    return listBoardPositions(match).some((targetPosition) =>
+      tryCommand(() =>
+        useSpecialCard(match, {
+          playerId,
+          cardType,
+          targetPosition
+        })
+      )
+    );
+  }
+
+  if (cardType === "coldBomb") {
+    const canTargetPlayer = Object.values(match.players).some((targetPlayer) =>
+      tryCommand(() =>
+        useSpecialCard(match, {
+          playerId,
+          cardType,
+          targetPlayerId: targetPlayer.id
+        })
+      )
+    );
+
+    if (canTargetPlayer) {
+      return true;
+    }
+
+    return listBoardPositions(match).some((targetPosition) =>
+      tryCommand(() =>
+        useSpecialCard(match, {
+          playerId,
+          cardType,
+          targetPosition
+        })
+      )
+    );
+  }
+
+  if (cardType === "hammer5") {
+    return listBoardPositions(match).some((center) =>
+      ROTATION_DIRECTIONS.some((direction) =>
+        tryCommand(() =>
+          useSpecialCard(match, {
+            playerId,
+            cardType,
+            selection: {
+              kind: "cross5",
+              center
+            },
+            direction
+          })
+        )
+      )
+    );
+  }
+
+  if (cardType === "hammer6") {
+    return listBoardPositions(match).some((origin) =>
+      RECTANGLE_ORIENTATIONS.some((orientation) =>
+        ROTATION_DIRECTIONS.some((direction) =>
+          tryCommand(() =>
+            useSpecialCard(match, {
+              playerId,
+              cardType,
+              selection: {
+                kind: "rectangle6",
+                origin,
+                orientation
+              },
+              direction
+            })
+          )
+        )
+      )
+    );
+  }
+
+  return listBoardPositions(match).some((firstPosition) =>
+    CARDINAL_DIRECTIONS.some((direction) =>
+      tryCommand(() =>
+        useSpecialCard(match, {
+          playerId,
+          cardType,
+          fencePositions: [firstPosition, movePosition(firstPosition, direction)]
+        })
+      )
+    )
+  );
+}
+
+export function queryTurnAffordances(
+  match: MatchState,
+  playerId: PlayerId
+): TurnAffordances {
+  if (
+    match.round.phase !== "inTurn" ||
+    match.round.activePlayerId !== playerId ||
+    match.round.turn?.playerId !== playerId
+  ) {
+    return createInactiveAffordances();
+  }
+
+  const stage = match.round.turn.stage;
+
+  if (stage === "mandatoryStep") {
+    const mandatoryMoveTargets = collectLegalMoveTargets(match, playerId);
+
+    return {
+      active: true,
+      stage,
+      mandatoryMoveTargets,
+      secondaryMoveTargets: [],
+      availableSecondaryActions: {
+        move: false,
+        throwTile: false,
+        rotateTiles: false,
+        specialCard: false,
+        openTreasure: false,
+        endTurn: false
+      },
+      availableSpecialCards: createDisabledSpecialCardRecord()
+    };
+  }
+
+  const player = match.players[playerId];
+
+  if (!player) {
+    return createInactiveAffordances();
+  }
+
+  const secondaryMoveTargets = collectLegalMoveTargets(match, playerId);
+  const availableSpecialCards = Object.fromEntries(
+    SPECIAL_CARD_TYPES.map((cardType) => [
+      cardType,
+      player.specialCards.includes(cardType) && canUseSpecialCardType(match, playerId, cardType)
+    ])
+  ) as Readonly<Record<SpecialCardType, boolean>>;
+  const hasSpecialCardAction = Object.values(availableSpecialCards).some(Boolean);
+
+  return {
+    active: true,
+    stage,
+    mandatoryMoveTargets: [],
+    secondaryMoveTargets,
+    availableSecondaryActions: {
+      move: secondaryMoveTargets.length > 0,
+      throwTile: hasAnyLegalThrow(match, playerId),
+      rotateTiles: hasAnyLegalNormalRotation(match, playerId),
+      specialCard: hasSpecialCardAction,
+      openTreasure: tryCommand(() => openCarriedTreasure(match, playerId)),
+      endTurn: tryCommand(() => endTurn(match, playerId))
+    },
+    availableSpecialCards
+  };
+}

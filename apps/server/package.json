@@ -1,0 +1,11 @@
+{
+  "name": "@project-bh/server",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "node --watch --experimental-strip-types ./src/http-server.ts"
+  }
+}
