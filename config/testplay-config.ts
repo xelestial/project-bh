@@ -1,16 +1,22 @@
 import type {
+  AuctionSpecialCardType,
   MatchSettings,
-  SpecialCardType,
   TileDefinition
 } from "../packages/domain/src/index.ts";
+
+export interface TreasureCardConfig {
+  readonly slot: number | null;
+  readonly points: number;
+}
 
 export interface TestplayConfig {
   readonly settings: Partial<MatchSettings>;
   readonly board: {
     readonly tiles: readonly TileDefinition[];
-    readonly specialCardDeck: readonly SpecialCardType[];
+    readonly specialCardDeck: readonly AuctionSpecialCardType[];
   };
-  readonly treasureCardsByPlayerCount: Readonly<Record<number, readonly (readonly number[])[]>>;
+  readonly treasureCardsPerPlayer: number;
+  readonly treasureCardDeck: readonly TreasureCardConfig[];
 }
 
 export const PROJECT_BH_TESTPLAY_CONFIG: TestplayConfig = {
@@ -40,32 +46,27 @@ export const PROJECT_BH_TESTPLAY_CONFIG: TestplayConfig = {
       "coldBomb",
       "flameBomb",
       "electricBomb",
-      "hammer5",
-      "hammer6",
-      "fence",
+      "largeHammer",
+      "recoveryPotion",
+      "jump",
+      "hook",
       "coldBomb",
       "flameBomb",
       "electricBomb",
-      "hammer5",
-      "hammer6",
-      "fence"
+      "largeHammer",
+      "jump",
+      "hook"
     ]
   },
-  treasureCardsByPlayerCount: {
-    2: [
-      [3, -1],
-      [4, 1]
-    ],
-    3: [
-      [3, -1],
-      [4, 1],
-      [6, 0]
-    ],
-    4: [
-      [3, -1],
-      [1, 0],
-      [4, 1],
-      [6, -2]
-    ]
-  }
+  treasureCardsPerPlayer: 2,
+  treasureCardDeck: [
+    { slot: 1, points: 3 },
+    { slot: 2, points: -1 },
+    { slot: 3, points: 1 },
+    { slot: 4, points: 0 },
+    { slot: 5, points: 4 },
+    { slot: 6, points: 1 },
+    { slot: 7, points: 6 },
+    { slot: null, points: -2 }
+  ]
 };

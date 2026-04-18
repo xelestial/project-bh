@@ -1,0 +1,40 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { createMatchInputFromConfig } from "./match-config-creator.ts";
+
+test("match config creator deals treasure cards deterministically and preserves the public treasure board slots", () => {
+  const players = [
+    { id: "player-1", name: "Alpha" },
+    { id: "player-2", name: "Bravo" },
+    { id: "player-3", name: "Charlie" },
+    { id: "player-4", name: "Delta" }
+  ] as const;
+
+  const first = createMatchInputFromConfig("match-seeded", players);
+  const second = createMatchInputFromConfig("match-seeded", players);
+
+  assert.deepEqual(first.treasureBoardSlots, [1, 2, 3, 4, 5, 6, 7]);
+  assert.deepEqual(first.treasures, second.treasures);
+  assert.equal(first.treasures?.length, 8);
+  assert.equal(first.treasures?.filter((treasure) => treasure.slot === null).length, 1);
+  assert.equal(new Set(first.treasures?.map((treasure) => treasure.id)).size, 8);
+});
+
+test("match config creator deals two treasure cards per player", () => {
+  const input = createMatchInputFromConfig("match-two-player", [
+    { id: "player-1", name: "Alpha" },
+    { id: "player-2", name: "Bravo" }
+  ]);
+
+  const cardsByPlayer = (input.treasures ?? []).reduce<Record<string, number>>((counts, treasure) => {
+    const playerId = treasure.ownerPlayerId ?? "missing";
+    return {
+      ...counts,
+      [playerId]: (counts[playerId] ?? 0) + 1
+    };
+  }, {});
+
+  assert.equal(cardsByPlayer["player-1"], 2);
+  assert.equal(cardsByPlayer["player-2"], 2);
+});

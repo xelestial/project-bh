@@ -10,16 +10,31 @@ The current codebase implements the following rule-backed behavior.
 - Match settings such as starting HP, starting score, total rounds, auction draw count, and the inner rotation zone are loaded from `config/testplay-config.ts`.
 - Each player starts the round with the configured HP and score values.
 - A round starts in `treasurePlacement` when treasure cards are configured and only becomes turn-playable after:
-  - each player places their own treasure cards
+  - each player places their own real treasure tokens
   - all non-eliminated players submit auction bids for the currently revealed card
   - each revealed auction card resolves before the next card is shown
   - all non-eliminated players submit priority cards
 - Each round draws the configured number of special-card offers from a deterministic deck cursor.
 - Only one auction offer is visible at a time.
 - Auction bids are submitted as sealed integer bids for the currently revealed card only.
-- Winning bids deduct score immediately and award the currently revealed special card to the winning player.
-- Treasure cards belong to specific players and are hidden-information values until the owner sees them or the treasure is opened.
+- Winning bids deduct score immediately and add the current offer as charged inventory on the winning player.
+- Fence cards do not appear in the auction offer deck and may instead be purchased for `1` point during each auction reveal before that player submits the current bid.
+- Treasure card dealing is now deterministic per match id and uses a shuffled treasure-card deck at the creator layer.
+- The current testplay treasure deck contains:
+  - seven real slot cards for treasure-board slots `1-7`
+  - one fake card with no matching slot and no matching board token
+- Each player is currently dealt `2` treasure cards at round start.
+- Only real slot cards create a matching map token that must be placed during `treasurePlacement`.
+- The fake card stays viewer-private during the treasure-placement phase and does not block phase completion.
+- Treasure card scores and slot numbers are no longer projected in the public room snapshot.
 - Treasure placement is currently validated inside the configured inner rotation zone.
+- The public snapshot only exposes:
+  - whether a treasure token exists on the map
+  - whether a treasure-board slot is occupied
+  - whether a slot has already been opened
+- The viewer-private snapshot only exposes:
+  - the viewer's current treasure-placement hand during `treasurePlacement`
+  - treasure card details for treasures that the same viewer already opened
 - Priority cards are consumed from a player-owned `1-6` hand and reset when the hand is exhausted.
 - Higher unique priority cards act earlier.
 - Players tied on priority move to the back of the order and are resolved deterministically by clockwise distance from the highest-priority anchor player.
@@ -35,6 +50,7 @@ The current codebase implements the following rule-backed behavior.
 - A carried treasure blocks special-card use as well.
 - A carried treasure still allows movement, and opening is still only allowed at the owner's start tile.
 - A carried treasure may only be opened on the player's start tile.
+- Opening a treasure reveals its hidden slot mapping only to the opener.
 - Opening the fourth treasure completes the round.
 - Fire, water, and electric tiles are currently throwable.
 - A thrown tile must:
@@ -72,15 +88,26 @@ The current codebase implements the following rule-backed behavior.
   - `electricBomb`
     - can create electric on any target tile
     - removes a fence on the target tile before applying electric
-  - `hammer5`
-    - unlocks `cross5` rotation for the action
-  - `hammer6`
-    - unlocks `rectangle6` rotation for the action
+  - `largeHammer`
+    - unlocks both `cross5` and `rectangle6` rotation for the action
   - `fence`
-    - places a length-2 fence on two orthogonally adjacent tiles
+    - is stored as charge inventory and places a length-2 fence on two orthogonally adjacent tiles
+  - `recoveryPotion`
+    - clears temporary status effects and restores HP to the configured round maximum
+  - `jump`
+    - moves exactly `2` tiles in a straight line
+  - `hook`
+    - moves the acting player onto the tile adjacent to a straight-line target player `2-4` tiles away
+- Charged inventory currently resolves as:
+  - bomb cards: `3` uses
+  - `largeHammer`: `3` uses
+  - `fence`: `3` uses per purchase
+  - `recoveryPotion`: `1` use
+  - `jump`: `3` uses
+  - `hook`: `2` uses
 - Preparing the next round currently:
   - resets HP, elimination, carry state, and temporary status state
-  - keeps score, special cards, and remaining priority hand state
+  - keeps score, special-card inventory charges, and remaining priority hand state
   - resets treasures to an unplaced state for the next treasure-placement phase
 - At the end of round `5`, the match computes winners by:
   - highest total score
@@ -91,7 +118,6 @@ The current codebase implements the following rule-backed behavior.
 
 The following areas remain pending and should stay in the domain/application layers when added.
 
-- special-card auction flow
 - richer status duration and round-tick resolution
 - durable external snapshot schema and event envelopes
 - persistent server storage
@@ -108,8 +134,9 @@ The following areas remain pending and should stay in the domain/application lay
 - Auction ties are currently interpreted as:
   - highest bid wins
   - equal bids break by lower seat index
-- The current auction model assumes sequential sealed bidding across the drawn offer queue.
+- The current auction model assumes sequential sealed bidding across the drawn offer queue plus direct `1`-point fence purchases before each player's current reveal is submitted.
 - Ice treasure-drop tie cases currently use a deterministic fallback ordering instead of interactive player choice.
 - Round reset currently preserves board tile and fence state unless later rules require a board reset between rounds.
 - The current rotation model assumes the active player may target any legal selection on the board; only selection validity, player occupancy, and fence-boundary constraints can reject it.
 - Test fixtures may still place treasures directly outside the configured placement zone when they need focused domain coverage for older scenarios.
+- The current fake-card implementation assumes the fake card has no matching board slot or map token and therefore never produces an openable treasure token.

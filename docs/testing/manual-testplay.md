@@ -39,6 +39,27 @@ Expected result:
 
 - Vite prints `Local: http://127.0.0.1:5173/`
 
+## Automated browser smoke
+
+Run the browser smoke path when you want the shell to verify the room lifecycle and the current board-first GUI flow end to end:
+
+```bash
+RUN_BROWSER_SMOKE=1 node --experimental-strip-types --test apps/web/src/gui-smoke.e2e.test.ts
+```
+
+Expected result in a normal local shell:
+
+- the test starts its own authoritative server and Vite web server
+- it creates a host room and joins with a second browser session
+- it places all treasure cards through the right-click menu
+- it verifies auction cards reveal one at a time
+- it submits priority cards and confirms right-click movement enters the secondary action stage
+
+Environment note:
+
+- the smoke test is opt-in and does not launch a local browser unless `RUN_BROWSER_SMOKE=1` is set
+- the smoke test skips itself if local port binding or Chrome headless debugging is blocked by the current sandbox
+
 ## Port override examples
 
 If default ports are blocked, move both ends explicitly:
@@ -71,20 +92,26 @@ Expected result:
 - both clients show the same round phase and board state
 - later commands update both windows through WebSocket broadcasts
 - each client sees only its own treasure-card values in the bottom overlay
+- a fake treasure card, when dealt, stays visible only to the receiving player during `treasurePlacement`
+- unopened map treasures never reveal their slot number or score in the shared board view
 
 ## Recommended smoke path
 
 Use this short path for every fresh manual run:
 
-1. In both clients, use the treasure-card overlay to select a treasure card and then right-click a board cell to place it.
-2. Verify the treasure-placement phase only ends after all treasure cards are placed.
-3. In both clients, submit a bid for the currently revealed auction card.
-4. Verify only one auction card is shown at a time and the next card appears after the previous one resolves.
-5. Submit priority cards from both players.
-6. Verify the active player matches the resolved priority order.
-7. Right-click cells to move, rotate, throw, or use selected special cards.
-8. End turn and verify the other client receives the same active-player update.
-9. When a round completes, press `다음 라운드`.
+1. In both clients, use the treasure-card overlay to select each real treasure card and then right-click a board cell to place its matching token.
+2. If a fake card is dealt, verify it is shown only to that player and does not produce a placeable map token.
+3. Verify the treasure-placement phase only ends after all real treasure tokens are placed.
+4. In both clients, submit a bid for the currently revealed auction card.
+5. Use `울타리 구매 (1점)` before submitting a bid when you want to verify direct fence-charge purchases during auction.
+6. Verify only one auction card is shown at a time and the next card appears after the previous one resolves.
+7. Submit priority cards from both players.
+8. Verify the active player matches the resolved priority order.
+9. Right-click cells to move, rotate, throw, or use selected special cards. Use the bottom inventory overlay to confirm remaining special-card charges decrease after use.
+10. End turn and verify the other client receives the same active-player update.
+11. When a round completes, press `다음 라운드`.
+
+The automated smoke test covers steps 1 through 7 for the current shell.
 
 ## Current manually testable commands
 
@@ -94,8 +121,9 @@ Use this short path for every fresh manual run:
 - right-click cell action query
 - one-step movement
 - tile throw
-- square2, cross5, rectangle6 rotation
+- square2 rotation and large-hammer cross5/rectangle6 rotation
 - special card targeting from the bottom overlay
+- direct recovery-potion use from the bottom overlay
 - treasure opening
 - turn ending
 - next-round preparation

@@ -66,7 +66,7 @@ function createRotationActions(
   match: MatchState,
   playerId: PlayerId,
   cell: Position,
-  mode: "normal" | "hammer5" | "hammer6"
+  mode: "normal" | "largeHammer"
 ): ActionCandidate[] {
   const actions: ActionCandidate[] = [];
   const addRotation = (
@@ -120,89 +120,50 @@ function createRotationActions(
       { kind: "square2", origin: cell },
       "counterclockwise"
     );
-    addRotation(
-      `rotate-cross5-cw-${cell.x}-${cell.y}`,
-      "십자 5칸 시계 회전",
-      { kind: "cross5", center: cell },
-      "clockwise"
-    );
-    addRotation(
-      `rotate-cross5-ccw-${cell.x}-${cell.y}`,
-      "십자 5칸 반시계 회전",
-      { kind: "cross5", center: cell },
-      "counterclockwise"
-    );
-    addRotation(
-      `rotate-rect-h-cw-${cell.x}-${cell.y}`,
-      "가로 6칸 시계 회전",
-      { kind: "rectangle6", origin: cell, orientation: "horizontal" },
-      "clockwise"
-    );
-    addRotation(
-      `rotate-rect-h-ccw-${cell.x}-${cell.y}`,
-      "가로 6칸 반시계 회전",
-      { kind: "rectangle6", origin: cell, orientation: "horizontal" },
-      "counterclockwise"
-    );
-    addRotation(
-      `rotate-rect-v-cw-${cell.x}-${cell.y}`,
-      "세로 6칸 시계 회전",
-      { kind: "rectangle6", origin: cell, orientation: "vertical" },
-      "clockwise"
-    );
-    addRotation(
-      `rotate-rect-v-ccw-${cell.x}-${cell.y}`,
-      "세로 6칸 반시계 회전",
-      { kind: "rectangle6", origin: cell, orientation: "vertical" },
-      "counterclockwise"
-    );
   }
 
-  if (mode === "hammer5") {
+  if (mode === "largeHammer") {
     addRotation(
-      `hammer5-cw-${cell.x}-${cell.y}`,
-      "망치5 시계 회전",
+      `large-hammer-cross-cw-${cell.x}-${cell.y}`,
+      "대형 망치 십자 시계 회전",
       { kind: "cross5", center: cell },
       "clockwise",
-      "hammer5"
+      "largeHammer"
     );
     addRotation(
-      `hammer5-ccw-${cell.x}-${cell.y}`,
-      "망치5 반시계 회전",
+      `large-hammer-cross-ccw-${cell.x}-${cell.y}`,
+      "대형 망치 십자 반시계 회전",
       { kind: "cross5", center: cell },
       "counterclockwise",
-      "hammer5"
+      "largeHammer"
     );
-  }
-
-  if (mode === "hammer6") {
     addRotation(
-      `hammer6-h-cw-${cell.x}-${cell.y}`,
-      "망치6 가로 시계 회전",
+      `large-hammer-h-cw-${cell.x}-${cell.y}`,
+      "대형 망치 가로 시계 회전",
       { kind: "rectangle6", origin: cell, orientation: "horizontal" },
       "clockwise",
-      "hammer6"
+      "largeHammer"
     );
     addRotation(
-      `hammer6-h-ccw-${cell.x}-${cell.y}`,
-      "망치6 가로 반시계 회전",
+      `large-hammer-h-ccw-${cell.x}-${cell.y}`,
+      "대형 망치 가로 반시계 회전",
       { kind: "rectangle6", origin: cell, orientation: "horizontal" },
       "counterclockwise",
-      "hammer6"
+      "largeHammer"
     );
     addRotation(
-      `hammer6-v-cw-${cell.x}-${cell.y}`,
-      "망치6 세로 시계 회전",
+      `large-hammer-v-cw-${cell.x}-${cell.y}`,
+      "대형 망치 세로 시계 회전",
       { kind: "rectangle6", origin: cell, orientation: "vertical" },
       "clockwise",
-      "hammer6"
+      "largeHammer"
     );
     addRotation(
-      `hammer6-v-ccw-${cell.x}-${cell.y}`,
-      "망치6 세로 반시계 회전",
+      `large-hammer-v-ccw-${cell.x}-${cell.y}`,
+      "대형 망치 세로 반시계 회전",
       { kind: "rectangle6", origin: cell, orientation: "vertical" },
       "counterclockwise",
-      "hammer6"
+      "largeHammer"
     );
   }
 
@@ -342,11 +303,8 @@ export function queryCellActions(
         }
         break;
       }
-      case "hammer5":
-        actions.push(...createRotationActions(match, playerId, cell, "hammer5"));
-        break;
-      case "hammer6":
-        actions.push(...createRotationActions(match, playerId, cell, "hammer6"));
+      case "largeHammer":
+        actions.push(...createRotationActions(match, playerId, cell, "largeHammer"));
         break;
       case "fence":
         if (!pendingAction.firstPosition) {
@@ -379,6 +337,70 @@ export function queryCellActions(
                 Position,
                 Position
               ]
+            })
+          );
+        }
+        break;
+      case "jump":
+        if (
+          tryCommand(() =>
+            useSpecialCard(match, {
+              playerId,
+              cardType: "jump",
+              targetPosition: cell
+            })
+          )
+        ) {
+          actions.push(
+            createCommandAction("jump-target", "여기로 뛰어넘기", {
+              type: "match.useSpecialCard",
+              cardType: "jump",
+              targetPosition: cell
+            })
+          );
+        }
+        break;
+      case "hook": {
+        const targetPlayers = Object.values(match.players).filter(
+          (candidate) => candidate.position.x === cell.x && candidate.position.y === cell.y
+        );
+
+        for (const targetPlayer of targetPlayers) {
+          if (
+            !tryCommand(() =>
+              useSpecialCard(match, {
+                playerId,
+                cardType: "hook",
+                targetPlayerId: targetPlayer.id
+              })
+            )
+          ) {
+            continue;
+          }
+
+          actions.push(
+            createCommandAction(`hook-${targetPlayer.id}`, `${targetPlayer.name}에게 갈고리 사용`, {
+              type: "match.useSpecialCard",
+              cardType: "hook",
+              targetPlayerId: targetPlayer.id
+            })
+          );
+        }
+        break;
+      }
+      case "recoveryPotion":
+        if (
+          tryCommand(() =>
+            useSpecialCard(match, {
+              playerId,
+              cardType: "recoveryPotion"
+            })
+          )
+        ) {
+          actions.push(
+            createCommandAction("recovery-potion", "회복제 사용", {
+              type: "match.useSpecialCard",
+              cardType: "recoveryPotion"
             })
           );
         }

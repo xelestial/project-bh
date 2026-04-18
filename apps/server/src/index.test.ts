@@ -1,8 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createPosition } from "../../../packages/domain/src/index.ts";
 import { createServerCompositionRoot } from "./index.ts";
+
+function resolveAuctionPhase(
+  server: ReturnType<typeof createServerCompositionRoot>,
+  sessionId: string,
+  matchId: string
+): void {
+  while (server.getSnapshot(sessionId).state.round.phase === "auction") {
+    server.dispatchCommand(sessionId, {
+      type: "match.submitAuctionBids",
+      version: 1,
+      matchId,
+      playerId: "player-1",
+      bids: []
+    });
+    server.dispatchCommand(sessionId, {
+      type: "match.submitAuctionBids",
+      version: 1,
+      matchId,
+      playerId: "player-2",
+      bids: []
+    });
+  }
+}
 
 test("server creates sessions, validates commands, and keeps an authoritative log", () => {
   const server = createServerCompositionRoot();
@@ -11,14 +33,6 @@ test("server creates sessions, validates commands, and keeps an authoritative lo
     players: [
       { id: "player-1", name: "Alpha" },
       { id: "player-2", name: "Bravo" }
-    ],
-    treasures: [
-      {
-        id: "treasure-1",
-        slot: 1,
-        points: 3,
-        position: createPosition(1, 0)
-      }
     ]
   });
 
@@ -32,20 +46,7 @@ test("server creates sessions, validates commands, and keeps an authoritative lo
 
   assert.equal(invalid.rejection?.code, "PROTOCOL_VALIDATION_FAILED");
 
-  server.dispatchCommand("session-1", {
-    type: "match.submitAuctionBids",
-    version: 1,
-    matchId: "match-1",
-    playerId: "player-1",
-    bids: []
-  });
-  server.dispatchCommand("session-1", {
-    type: "match.submitAuctionBids",
-    version: 1,
-    matchId: "match-1",
-    playerId: "player-2",
-    bids: []
-  });
+  resolveAuctionPhase(server, "session-1", "match-1");
   server.dispatchCommand("session-1", {
     type: "match.submitPriority",
     version: 1,
@@ -63,7 +64,7 @@ test("server creates sessions, validates commands, and keeps an authoritative lo
 
   assert.equal(result.rejection, null);
   assert.equal(server.getSnapshot("session-1").state.round.activePlayerId, "player-1");
-  assert.equal(server.getEventLog("session-1").length, 4);
+  assert.equal(server.getEventLog("session-1").length, 10);
 });
 
 test("server reconnect returns snapshot and command history", () => {
@@ -76,23 +77,10 @@ test("server reconnect returns snapshot and command history", () => {
     ]
   });
 
-  server.dispatchCommand("session-2", {
-    type: "match.submitAuctionBids",
-    version: 1,
-    matchId: "match-2",
-    playerId: "player-1",
-    bids: []
-  });
-  server.dispatchCommand("session-2", {
-    type: "match.submitAuctionBids",
-    version: 1,
-    matchId: "match-2",
-    playerId: "player-2",
-    bids: []
-  });
+  resolveAuctionPhase(server, "session-2", "match-2");
 
   const reconnect = server.reconnect("session-2", "player-1");
 
   assert.equal(reconnect.snapshot.state.round.phase, "prioritySubmission");
-  assert.equal(reconnect.log.length, 2);
+  assert.equal(reconnect.log.length, 8);
 });

@@ -76,6 +76,23 @@ test("application layer resolves auction bids before the priority phase", () => 
   );
 });
 
+test("application layer buys fence charges during the auction phase", () => {
+  const match = createAuctionFixture();
+  const result = handleMatchCommand(match, {
+    type: "match.purchaseSpecialCard",
+    version: 1,
+    matchId: match.matchId,
+    playerId: "player-1",
+    cardType: "fence"
+  });
+
+  assert.equal(result.rejection, null);
+  assert.equal(result.state.players["player-1"]?.specialInventory.fence, 3);
+  assert.ok(
+    result.events.some((event) => (event as { type: string }).type === "specialCardPurchased")
+  );
+});
+
 test("application layer returns authoritative events for a valid move", () => {
   const match = createTwoPlayerMatchFixture();
 

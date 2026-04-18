@@ -1,11 +1,12 @@
-import type {
-  AuctionBidState,
-  Direction,
-  Position,
-  PriorityCard,
-  RotationDirection,
-  RotationSelection,
-  SpecialCardType
+import {
+  SPECIAL_CARD_TYPES,
+  type AuctionBidState,
+  type Direction,
+  type Position,
+  type PriorityCard,
+  type RotationDirection,
+  type RotationSelection,
+  type SpecialCardType
 } from "../../domain/src/index.ts";
 import type {
   EndTurnCommand,
@@ -13,6 +14,7 @@ import type {
   MovePlayerCommand,
   OpenTreasureCommand,
   PlaceTreasureCommand,
+  PurchaseSpecialCardCommand,
   PrepareNextRoundCommand,
   RotateTilesCommand,
   SubmitAuctionBidsCommand,
@@ -28,14 +30,7 @@ const ROTATION_DIRECTIONS: readonly RotationDirection[] = [
   "clockwise",
   "counterclockwise"
 ];
-const SPECIAL_CARDS: readonly SpecialCardType[] = [
-  "coldBomb",
-  "flameBomb",
-  "electricBomb",
-  "hammer5",
-  "hammer6",
-  "fence"
-];
+const SPECIAL_CARDS: readonly SpecialCardType[] = SPECIAL_CARD_TYPES;
 
 export interface ValidationFailure {
   readonly ok: false;
@@ -579,6 +574,33 @@ function validateUseSpecialCardCommand(
   };
 }
 
+function validatePurchaseSpecialCardCommand(
+  value: unknown
+): ValidationResult<PurchaseSpecialCardCommand> {
+  const envelope = validateCommandEnvelope(value);
+
+  if (!envelope.ok) {
+    return envelope;
+  }
+
+  if (envelope.value.type !== "match.purchaseSpecialCard") {
+    return { ok: false, message: "Expected a match.purchaseSpecialCard command." };
+  }
+
+  if (!isRecord(value) || !isSpecialCardType(value.cardType)) {
+    return { ok: false, message: "cardType must be a valid special card name." };
+  }
+
+  return {
+    ok: true,
+    value: {
+      ...envelope.value,
+      type: "match.purchaseSpecialCard",
+      cardType: value.cardType
+    }
+  };
+}
+
 function validateOpenTreasureCommand(
   value: unknown
 ): ValidationResult<OpenTreasureCommand> {
@@ -680,6 +702,8 @@ export function validateMatchCommand(value: unknown): ValidationResult<MatchComm
       return validateRotateTilesCommand(value);
     case "match.useSpecialCard":
       return validateUseSpecialCardCommand(value);
+    case "match.purchaseSpecialCard":
+      return validatePurchaseSpecialCardCommand(value);
     case "match.openTreasure":
       return validateOpenTreasureCommand(value);
     case "match.endTurn":

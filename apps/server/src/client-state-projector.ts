@@ -15,19 +15,37 @@ export interface ProjectedMatchSnapshot {
         readonly height: number;
       };
     };
-    readonly players: MatchSessionSnapshot["state"]["players"];
+    readonly treasureBoard: {
+      readonly slots: readonly {
+        readonly slot: number;
+        readonly hasCard: boolean;
+        readonly opened: boolean;
+      }[];
+    };
+    readonly players: Readonly<
+      Record<
+        string,
+        {
+          readonly id: string;
+          readonly name: string;
+          readonly seat: number;
+          readonly position: { readonly x: number; readonly y: number };
+          readonly score: number;
+          readonly hitPoints: number;
+          readonly eliminated: boolean;
+          readonly carryingTreasure: boolean;
+        }
+      >
+    >;
     readonly treasures: Readonly<
       Record<
         string,
         {
           readonly id: string;
-          readonly slot: number;
-          readonly ownerPlayerId: string;
           readonly position: { readonly x: number; readonly y: number } | null;
           readonly carriedByPlayerId: string | null;
           readonly openedByPlayerId: string | null;
           readonly removedFromRound: boolean;
-          readonly visiblePoints: number | null;
         }
       >
     >;
@@ -48,13 +66,24 @@ export interface ProjectedMatchSnapshot {
   };
   readonly viewer: {
     readonly playerId: string;
-    readonly ownedTreasureCards: readonly {
+    readonly self: {
+      readonly id: string;
+      readonly carriedTreasureId: string | null;
+      readonly openedTreasureIds: readonly string[];
+      readonly availablePriorityCards: MatchSessionSnapshot["state"]["players"][string]["availablePriorityCards"];
+      readonly specialInventory: MatchSessionSnapshot["state"]["players"][string]["specialInventory"];
+      readonly status: MatchSessionSnapshot["state"]["players"][string]["status"];
+    };
+    readonly treasurePlacementHand: readonly {
+      readonly id: string;
+      readonly slot: number | null;
+      readonly points: number;
+      readonly isFake: boolean;
+    }[];
+    readonly revealedTreasureCards: readonly {
       readonly id: string;
       readonly slot: number;
       readonly points: number;
-      readonly placed: boolean;
-      readonly opened: boolean;
-      readonly position: { readonly x: number; readonly y: number } | null;
     }[];
     readonly turnHints: ReturnType<typeof queryTurnAffordances>;
   };
@@ -66,6 +95,22 @@ export function projectSnapshotForPlayer(
 ): ProjectedMatchSnapshot {
   const currentOffer =
     snapshot.state.round.auction.offers[snapshot.state.round.auction.currentOfferIndex] ?? null;
+  const publicTreasureEntries = Object.values(snapshot.state.treasures)
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .map((treasure, index) => {
+      const publicId = `treasure-token-${index + 1}`;
+
+      return [
+        publicId,
+        {
+          id: publicId,
+          position: treasure.position,
+          carriedByPlayerId: treasure.carriedByPlayerId,
+          openedByPlayerId: treasure.openedByPlayerId,
+          removedFromRound: treasure.removedFromRound
+        }
+      ] as const;
+    });
 
   return {
     sessionId: snapshot.sessionId,
@@ -77,25 +122,33 @@ export function projectSnapshotForPlayer(
         roundOpenTreasureTarget: snapshot.state.settings.roundOpenTreasureTarget,
         rotationZone: snapshot.state.settings.rotationZone
       },
-      players: snapshot.state.players,
-      treasures: Object.fromEntries(
-        Object.values(snapshot.state.treasures).map((treasure) => [
-          treasure.id,
+      treasureBoard: {
+        slots: snapshot.state.treasureBoardSlots.map((slot) => {
+          const treasure = Object.values(snapshot.state.treasures).find((candidate) => candidate.slot === slot);
+
+          return {
+            slot,
+            hasCard: treasure !== undefined,
+            opened: treasure !== undefined && treasure.openedByPlayerId !== null
+          };
+        })
+      },
+      players: Object.fromEntries(
+        Object.values(snapshot.state.players).map((player) => [
+          player.id,
           {
-            id: treasure.id,
-            slot: treasure.slot,
-            ownerPlayerId: treasure.ownerPlayerId,
-            position: treasure.position,
-            carriedByPlayerId: treasure.carriedByPlayerId,
-            openedByPlayerId: treasure.openedByPlayerId,
-            removedFromRound: treasure.removedFromRound,
-            visiblePoints:
-              treasure.ownerPlayerId === viewerPlayerId || treasure.openedByPlayerId !== null
-                ? treasure.points
-                : null
+            id: player.id,
+            name: player.name,
+            seat: player.seat,
+            position: player.position,
+            score: player.score,
+            hitPoints: player.hitPoints,
+            eliminated: player.eliminated,
+            carryingTreasure: player.carriedTreasureId !== null
           }
         ])
       ),
+      treasures: Object.fromEntries(publicTreasureEntries),
       board: snapshot.state.board,
       round: {
         roundNumber: snapshot.state.round.roundNumber,
@@ -113,16 +166,37 @@ export function projectSnapshotForPlayer(
     },
     viewer: {
       playerId: viewerPlayerId,
-      ownedTreasureCards: Object.values(snapshot.state.treasures)
-        .filter((treasure) => treasure.ownerPlayerId === viewerPlayerId)
-        .map((treasure) => ({
+      self: {
+        id: snapshot.state.players[viewerPlayerId]!.id,
+        carriedTreasureId: snapshot.state.players[viewerPlayerId]!.carriedTreasureId,
+        openedTreasureIds: snapshot.state.players[viewerPlayerId]!.openedTreasureIds,
+        availablePriorityCards: snapshot.state.players[viewerPlayerId]!.availablePriorityCards,
+        specialInventory: snapshot.state.players[viewerPlayerId]!.specialInventory,
+        status: snapshot.state.players[viewerPlayerId]!.status
+      },
+      treasurePlacementHand:
+        snapshot.state.round.phase === "treasurePlacement"
+          ? Object.values(snapshot.state.treasures)
+            .filter((treasure) => treasure.ownerPlayerId === viewerPlayerId)
+            .filter((treasure) => treasure.slot === null || treasure.position === null)
+            .map((treasure) => ({
+              id: treasure.id,
+              slot: treasure.slot,
+              points: treasure.points,
+              isFake: treasure.slot === null
+            }))
+          : [],
+      revealedTreasureCards: Object.values(snapshot.state.treasures).flatMap((treasure) => {
+        if (treasure.openedByPlayerId !== viewerPlayerId || treasure.slot === null) {
+          return [];
+        }
+
+        return [{
           id: treasure.id,
           slot: treasure.slot,
-          points: treasure.points,
-          placed: treasure.position !== null,
-          opened: treasure.openedByPlayerId !== null,
-          position: treasure.position
-        })),
+          points: treasure.points
+        }];
+      }),
       turnHints: queryTurnAffordances(snapshot.state, viewerPlayerId)
     }
   };

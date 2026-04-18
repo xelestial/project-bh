@@ -5,7 +5,10 @@ import type {
   ActionCommandPayload,
   PendingCellAction
 } from "../../../packages/protocol/src/index.ts";
-import type { SpecialCardType } from "../../../packages/domain/src/index.ts";
+import {
+  SPECIAL_CARD_TYPES,
+  type SpecialCardType
+} from "../../../packages/domain/src/index.ts";
 import {
   createBrowserTransportConfig,
   resolveHttpUrl,
@@ -44,6 +47,13 @@ interface ProjectedSnapshot {
         height: number;
       };
     };
+    treasureBoard: {
+      slots: {
+        slot: number;
+        hasCard: boolean;
+        opened: boolean;
+      }[];
+    };
     players: Record<
       string,
       {
@@ -54,22 +64,17 @@ interface ProjectedSnapshot {
         score: number;
         hitPoints: number;
         eliminated: boolean;
-        carriedTreasureId: string | null;
-        specialCards: SpecialCardType[];
-        availablePriorityCards: number[];
+        carryingTreasure: boolean;
       }
     >;
     treasures: Record<
       string,
       {
         id: string;
-        slot: number;
-        ownerPlayerId: string;
         position: { x: number; y: number } | null;
         carriedByPlayerId: string | null;
         openedByPlayerId: string | null;
         removedFromRound: boolean;
-        visiblePoints: number | null;
       }
     >;
     board: {
@@ -96,13 +101,29 @@ interface ProjectedSnapshot {
   };
   viewer: {
     playerId: string;
-    ownedTreasureCards: {
+    self: {
+      id: string;
+      carriedTreasureId: string | null;
+      openedTreasureIds: string[];
+      availablePriorityCards: number[];
+      specialInventory: Record<SpecialCardType, number>;
+      status: {
+        fire: boolean;
+        water: boolean;
+        skipNextTurnCount: number;
+        movementLimit: number | null;
+      };
+    };
+    treasurePlacementHand: {
+      id: string;
+      slot: number | null;
+      points: number;
+      isFake: boolean;
+    }[];
+    revealedTreasureCards: {
       id: string;
       slot: number;
       points: number;
-      placed: boolean;
-      opened: boolean;
-      position: { x: number; y: number } | null;
     }[];
     turnHints: {
       active: boolean;
@@ -158,6 +179,12 @@ interface RecentRoomEntry {
 
 const PLAYER_NAME_STORAGE_KEY = "project-bh.player-name";
 const RECENT_ROOMS_STORAGE_KEY = "project-bh.recent-rooms";
+const ACTIVE_SESSION_STORAGE_KEY = "project-bh.active-session";
+
+interface ActiveSessionEntry {
+  roomId: string;
+  playerId: string;
+}
 
 function normalizeInviteCode(value: string): string {
   return value.toUpperCase().replace(/[^A-Z2-9]/g, "").slice(0, 6);
@@ -202,6 +229,44 @@ function readRecentRooms(): RecentRoomEntry[] {
 
 function writeRecentRooms(entries: readonly RecentRoomEntry[]): void {
   window.localStorage.setItem(RECENT_ROOMS_STORAGE_KEY, JSON.stringify(entries));
+}
+
+function readActiveSession(): ActiveSessionEntry | null {
+  try {
+    const raw = window.localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
+
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "roomId" in parsed &&
+      typeof parsed.roomId === "string" &&
+      "playerId" in parsed &&
+      typeof parsed.playerId === "string"
+    ) {
+      return {
+        roomId: parsed.roomId,
+        playerId: parsed.playerId
+      };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function writeActiveSession(entry: ActiveSessionEntry): void {
+  window.localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, JSON.stringify(entry));
+}
+
+function clearActiveSession(): void {
+  window.localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
 }
 
 function upsertRecentRoom(room: RoomState): RecentRoomEntry[] {
@@ -274,6 +339,32 @@ function formatTurnStage(stage: TurnStage | null): string {
   }
 }
 
+const SPECIAL_CARD_LABELS: Readonly<Record<SpecialCardType, string>> = {
+  coldBomb: "냉기 폭탄",
+  flameBomb: "화염 폭탄",
+  electricBomb: "전기 폭탄",
+  largeHammer: "대형 망치",
+  fence: "울타리",
+  recoveryPotion: "회복제",
+  jump: "뛰어넘기",
+  hook: "갈고리"
+};
+
+const SPECIAL_CARD_TARGET_HINTS: Readonly<Record<SpecialCardType, string>> = {
+  coldBomb: "타일 또는 플레이어 지정",
+  flameBomb: "타일 지정",
+  electricBomb: "타일 지정",
+  largeHammer: "회전 범위 지정",
+  fence: "두 칸 지정",
+  recoveryPotion: "즉시 사용",
+  jump: "2칸 착지 지정",
+  hook: "직선 플레이어 지정"
+};
+
+function formatSpecialCardLabel(cardType: SpecialCardType): string {
+  return SPECIAL_CARD_LABELS[cardType];
+}
+
 function pendingActionLabel(pendingAction: PendingCellAction | null, snapshot: ProjectedSnapshot | null): string | null {
   if (!pendingAction) {
     return null;
@@ -283,13 +374,20 @@ function pendingActionLabel(pendingAction: PendingCellAction | null, snapshot: P
     case "throw":
       return `타일 던지기 준비 (${pendingAction.source.x},${pendingAction.source.y})`;
     case "treasurePlacement": {
-      const card = snapshot?.viewer.ownedTreasureCards.find((candidate) => candidate.id === pendingAction.treasureId);
-      return card ? `보물 배치 준비 (${formatPoints(card.points)})` : "보물 배치 준비";
+      const card = snapshot?.viewer.treasurePlacementHand.find((candidate) => candidate.id === pendingAction.treasureId);
+
+      if (!card) {
+        return "보물 배치 준비";
+      }
+
+      return card.isFake
+        ? "가짜 카드 확인 중"
+        : `보물 배치 준비 (슬롯 ${card.slot}, ${formatPoints(card.points)})`;
     }
     case "specialCard":
       return pendingAction.kind === "specialCard" && pendingAction.firstPosition
-        ? `${pendingAction.cardType} 두 번째 칸 선택`
-        : `${pendingAction.cardType} 대상 선택`;
+        ? `${formatSpecialCardLabel(pendingAction.cardType)} 두 번째 칸 선택`
+        : `${formatSpecialCardLabel(pendingAction.cardType)} 대상 선택`;
   }
 }
 
@@ -391,11 +489,12 @@ function ContextMenu(props: {
   onSelect: (action: ActionCandidate) => void;
 }) {
   return (
-    <div className="context-menu" style={{ left: props.menu.x, top: props.menu.y }}>
+    <div className="context-menu" data-testid="context-menu" style={{ left: props.menu.x, top: props.menu.y }}>
       {props.menu.actions.map((action) => (
         <button
           key={action.id}
           className="context-action"
+          data-action-id={action.id}
           onClick={() => props.onSelect(action)}
         >
           <span>{action.label}</span>
@@ -416,7 +515,21 @@ function Scoreboard(props: { snapshot: ProjectedSnapshot }) {
           <strong>{player.name}</strong>
           <span>점수 {player.score}</span>
           <span>HP {player.hitPoints}</span>
-          <span>보물 {player.carriedTreasureId ? "운반중" : "없음"}</span>
+          <span>보물 {player.carryingTreasure ? "운반중" : "없음"}</span>
+        </article>
+      ))}
+    </section>
+  );
+}
+
+function TreasureBoardStrip(props: { snapshot: ProjectedSnapshot }) {
+  return (
+    <section className="scoreboard-strip">
+      {props.snapshot.state.treasureBoard.slots.map((slot) => (
+        <article key={slot.slot} className={`score-card ${slot.opened ? "is-eliminated" : ""}`}>
+          <strong>슬롯 {slot.slot}</strong>
+          <span>{slot.hasCard ? "봉인됨" : "비어 있음"}</span>
+          <span>{slot.opened ? "획득 완료" : "미공개"}</span>
         </article>
       ))}
     </section>
@@ -471,6 +584,7 @@ function BoardView(props: {
             type="button"
             key={key}
             className={`cell tile-${tile || "plain"} ${inZone ? "in-zone" : ""} ${zoneEdge} ${highlightClass}`}
+            data-cell={key}
             onContextMenu={(event) => props.onCellContextMenu(event, { x, y })}
           >
             <span className="coord">
@@ -484,7 +598,7 @@ function BoardView(props: {
             {tile ? <span className="badge tile-badge">{tile.slice(0, 2).toUpperCase()}</span> : null}
             {treasures.map((treasure) => (
               <span key={treasure.id} className="badge treasure-badge">
-                {treasure.visiblePoints === null ? "?" : formatPoints(treasure.visiblePoints)}
+                {treasure.openedByPlayerId ? "OP" : "BX"}
               </span>
             ))}
             <span className="player-stack">
@@ -521,10 +635,14 @@ export function App() {
   const [pendingAction, setPendingAction] = useState<PendingCellAction | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
-  const me = snapshot ? snapshot.state.players[playerId] : null;
+  const me = snapshot?.viewer.self ?? null;
+  const publicSelf = snapshot ? snapshot.state.players[playerId] : null;
   const isMyTurn = snapshot?.state.round.activePlayerId === playerId;
   const pendingLabel = pendingActionLabel(pendingAction, snapshot);
   const turnHints = snapshot?.viewer.turnHints ?? null;
+  const ownedSpecialCards = me
+    ? SPECIAL_CARD_TYPES.filter((cardType) => me.specialInventory[cardType] > 0)
+    : [];
   const highlightedCells =
     turnHints?.stage === "mandatoryStep"
       ? turnHints.mandatoryMoveTargets
@@ -548,6 +666,50 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (room || playerId) {
+      return;
+    }
+
+    const activeSession = readActiveSession();
+
+    if (!activeSession) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const payload = await requestJson<RoomEnvelope>(
+          resolveHttpUrl(
+            transportConfig,
+            `/api/rooms/${activeSession.roomId}?playerId=${activeSession.playerId}`
+          )
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        setRoom(payload.room);
+        setPlayerId(activeSession.playerId);
+        setSnapshot(payload.snapshot);
+        setInvitePreview(payload.room);
+        setInviteCode(payload.room.inviteCode);
+        setRecentRooms(upsertRecentRoom(payload.room));
+        setMessage("");
+        setShareMessage("");
+      } catch {
+        clearActiveSession();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [playerId, room, transportConfig]);
+
+  useEffect(() => {
     if (name.trim()) {
       window.localStorage.setItem(PLAYER_NAME_STORAGE_KEY, name.trim());
     }
@@ -565,6 +727,12 @@ export function App() {
 
     window.history.replaceState({}, "", url);
   }, [room?.inviteCode, inviteCode]);
+
+  useEffect(() => {
+    if (room && playerId) {
+      writeActiveSession({ roomId: room.roomId, playerId });
+    }
+  }, [playerId, room?.roomId]);
 
   useEffect(() => {
     if (!room || !playerId) {
@@ -643,6 +811,7 @@ export function App() {
       setSnapshot(null);
       setInvitePreview(payload.room);
       setRecentRooms(upsertRecentRoom(payload.room));
+      writeActiveSession({ roomId: payload.room.roomId, playerId: payload.playerId });
       setMessage("");
       setShareMessage("");
     } catch (error) {
@@ -686,6 +855,7 @@ export function App() {
       setSnapshot(null);
       setInvitePreview(payload.room);
       setRecentRooms(upsertRecentRoom(payload.room));
+      writeActiveSession({ roomId: payload.room.roomId, playerId: payload.playerId });
       setMessage("");
       setShareMessage("");
     } catch (error) {
@@ -709,6 +879,7 @@ export function App() {
       setRoom(payload.room);
       setSnapshot(payload.snapshot);
       setRecentRooms(upsertRecentRoom(payload.room));
+      writeActiveSession({ roomId: payload.room.roomId, playerId });
       setMessage("");
     } catch (error) {
       setMessage((error as Error).message);
@@ -727,6 +898,7 @@ export function App() {
       setRoom(payload.room);
       setSnapshot(payload.snapshot);
       setRecentRooms(upsertRecentRoom(payload.room));
+      writeActiveSession({ roomId: payload.room.roomId, playerId });
       setMessage("");
     } catch (error) {
       setMessage((error as Error).message);
@@ -754,6 +926,7 @@ export function App() {
 
       if (payload.snapshot) {
         setSnapshot(payload.snapshot);
+        writeActiveSession({ roomId: room.roomId, playerId });
       }
       setPendingAction(null);
       setMessage(payload.rejection?.message ?? "");
@@ -871,7 +1044,7 @@ export function App() {
 
   if (!room) {
     return (
-      <main className="app-shell lobby-shell">
+      <main className="app-shell lobby-shell" data-screen="landing">
         <section className="hero-row">
           <div>
             <p className="eyebrow">Project. BH</p>
@@ -886,7 +1059,7 @@ export function App() {
             <h2>Host A Party</h2>
             <label>
               Display name
-              <input value={name} onChange={(event) => setName(event.target.value)} />
+              <input data-testid="host-name-input" value={name} onChange={(event) => setName(event.target.value)} />
             </label>
             <label>
               Party size
@@ -896,7 +1069,9 @@ export function App() {
                 <option value="4">4</option>
               </select>
             </label>
-            <button disabled={!name.trim()} onClick={() => void createRoom()}>Create Party</button>
+            <button data-testid="create-party-button" disabled={!name.trim()} onClick={() => void createRoom()}>
+              Create Party
+            </button>
             <p className="panel-note">방을 만든 뒤에는 초대 링크를 복사해서 보내면 됩니다. 상대는 코드 전체를 외울 필요가 없습니다.</p>
           </div>
 
@@ -904,11 +1079,12 @@ export function App() {
             <h2>Join By Invite</h2>
             <label>
               Display name
-              <input value={name} onChange={(event) => setName(event.target.value)} />
+              <input data-testid="join-name-input" value={name} onChange={(event) => setName(event.target.value)} />
             </label>
             <label>
               Invite code
               <input
+                data-testid="invite-code-input"
                 value={inviteCode}
                 placeholder="ABC123"
                 onChange={(event) => {
@@ -919,12 +1095,14 @@ export function App() {
             </label>
             <div className="button-row">
               <button
+                data-testid="preview-room-button"
                 disabled={inviteCode.length !== 6}
                 onClick={() => void previewInvite(inviteCode)}
               >
                 Preview Room
               </button>
               <button
+                data-testid="join-party-button"
                 disabled={!name.trim() || inviteCode.length !== 6}
                 onClick={() => void joinRoom()}
               >
@@ -963,7 +1141,7 @@ export function App() {
     );
 
     return (
-      <main className="app-shell lobby-shell">
+      <main className="app-shell lobby-shell" data-screen="room-lobby">
         <header className="top-strip">
           <div className="title-row">
             <p className="eyebrow">Project. BH</p>
@@ -976,7 +1154,7 @@ export function App() {
             <span>You: {room.players.find((player) => player.id === playerId)?.name ?? playerId}</span>
             <button onClick={() => void refreshRoom()}>Refresh</button>
             {isHost ? (
-              <button disabled={room.players.length < 2} onClick={() => void startRoom()}>
+              <button data-testid="start-match-button" disabled={room.players.length < 2} onClick={() => void startRoom()}>
                 Start Match
               </button>
             ) : null}
@@ -988,7 +1166,7 @@ export function App() {
         <section className="lobby-grid">
           <section className="panel invite-panel">
             <h2>Invite Friends</h2>
-            <div className="invite-code-pill">{room.inviteCode}</div>
+            <div className="invite-code-pill" data-testid="invite-code-pill">{room.inviteCode}</div>
             <label>
               Share link
               <input value={inviteLink} readOnly />
@@ -1033,15 +1211,15 @@ export function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-screen="match">
       <header className="top-strip">
         <div className="title-row">
           <p className="eyebrow">Project. BH</p>
           <strong>Room {room.roomId}</strong>
           <span>{playerId}</span>
           {snapshot ? <span>Round {snapshot.state.round.roundNumber}/{snapshot.state.settings.totalRounds}</span> : null}
-          {snapshot ? <span>Phase {snapshot.state.round.phase}</span> : null}
-          {snapshot ? <span>Turn {formatTurnStage(snapshot.viewer.turnHints.stage)}</span> : null}
+          {snapshot ? <span data-testid="round-phase">Phase {snapshot.state.round.phase}</span> : null}
+          {snapshot ? <span data-testid="turn-stage">Turn {formatTurnStage(snapshot.viewer.turnHints.stage)}</span> : null}
           {pendingLabel ? <span className="pending-chip">{pendingLabel}</span> : null}
         </div>
 
@@ -1053,14 +1231,16 @@ export function App() {
       </header>
 
       {snapshot ? <Scoreboard snapshot={snapshot} /> : null}
+      {snapshot ? <TreasureBoardStrip snapshot={snapshot} /> : null}
 
       {snapshot ? (
         <section className="phase-strip">
           {snapshot.state.round.phase === "auction" ? (
-            <div className="phase-card">
+            <div className="phase-card" data-testid="auction-phase-card">
               <strong>Current Auction Card</strong>
-              <span>{snapshot.state.round.auction.currentOffer?.cardType ?? "none"}</span>
+              <span data-testid="auction-current-offer">{snapshot.state.round.auction.currentOffer?.cardType ?? "none"}</span>
               <input
+                data-testid="auction-bid-input"
                 type="number"
                 min="0"
                 value={auctionAmount}
@@ -1068,6 +1248,7 @@ export function App() {
                 disabled={snapshot.state.round.auction.hasSubmittedBid}
               />
               <button
+                data-testid="auction-submit-button"
                 disabled={snapshot.state.round.auction.hasSubmittedBid}
                 onClick={() =>
                   void sendCommand({
@@ -1084,6 +1265,18 @@ export function App() {
                 }
               >
                 입찰 제출
+              </button>
+              <button
+                data-testid="auction-buy-fence-button"
+                disabled={snapshot.state.round.auction.hasSubmittedBid || (publicSelf?.score ?? 0) < 1}
+                onClick={() =>
+                  void sendCommand({
+                    type: "match.purchaseSpecialCard",
+                    cardType: "fence"
+                  })
+                }
+              >
+                울타리 구매 (1점)
               </button>
             </div>
           ) : null}
@@ -1105,6 +1298,7 @@ export function App() {
                     <button
                       key={card}
                       className="priority-card"
+                      data-priority-card={card}
                       onClick={() =>
                         void sendCommand({
                           type: "match.submitPriority",
@@ -1119,6 +1313,7 @@ export function App() {
               ) : null}
               {snapshot.state.round.phase === "inTurn" && isMyTurn ? (
                 <button
+                  data-testid="end-turn-button"
                   disabled={!snapshot.viewer.turnHints.availableSecondaryActions.endTurn}
                   onClick={() => void sendCommand({ type: "match.endTurn" })}
                 >
@@ -1126,7 +1321,9 @@ export function App() {
                 </button>
               ) : null}
               {snapshot.state.round.phase === "completed" ? (
-                <button onClick={() => void sendCommand({ type: "match.prepareNextRound" })}>다음 라운드</button>
+                <button data-testid="prepare-next-round-button" onClick={() => void sendCommand({ type: "match.prepareNextRound" })}>
+                  다음 라운드
+                </button>
               ) : null}
             </div>
           </div>
@@ -1146,8 +1343,6 @@ export function App() {
             }}
           />
 
-          {contextMenu ? <ContextMenu menu={contextMenu} onSelect={(action) => void handleMenuSelect(action)} /> : null}
-
           {snapshot.state.result ? (
             <div className="result-box">
               Winners: {snapshot.state.result.winnerPlayerIds.join(", ")} | Score: {snapshot.state.result.highestScore}
@@ -1165,11 +1360,15 @@ export function App() {
           <section className="overlay-section">
             <h3>Treasure Cards</h3>
             <div className="overlay-row">
-              {snapshot.viewer.ownedTreasureCards.map((card) => (
+              {snapshot.viewer.treasurePlacementHand.length === 0 ? (
+                <span className="action-chip is-disabled">현재 열람 가능한 보물 카드가 없습니다.</span>
+              ) : snapshot.viewer.treasurePlacementHand.map((card) => (
                 <button
                   key={card.id}
                   className={`overlay-card treasure-card ${pendingAction?.kind === "treasurePlacement" && pendingAction.treasureId === card.id ? "is-selected" : ""}`}
-                  disabled={snapshot.state.round.phase !== "treasurePlacement" || card.opened}
+                  data-testid="treasure-card-button"
+                  data-treasure-id={card.id}
+                  disabled={snapshot.state.round.phase !== "treasurePlacement" || card.isFake}
                   onClick={() =>
                     setPendingAction((current) =>
                       current?.kind === "treasurePlacement" && current.treasureId === card.id
@@ -1178,12 +1377,26 @@ export function App() {
                     )
                   }
                 >
-                  <strong>{formatPoints(card.points)}</strong>
-                  <span>{card.placed ? "배치됨" : "배치 전"}</span>
+                  <strong>{card.isFake ? "가짜 카드" : `슬롯 ${card.slot}`}</strong>
+                  <span>{card.isFake ? "토큰 없음" : formatPoints(card.points)}</span>
                 </button>
               ))}
             </div>
           </section>
+
+          {snapshot.viewer.revealedTreasureCards.length > 0 ? (
+            <section className="overlay-section">
+              <h3>Opened Treasure Records</h3>
+              <div className="overlay-row">
+                {snapshot.viewer.revealedTreasureCards.map((card) => (
+                  <article key={card.id} className="overlay-card treasure-card">
+                    <strong>슬롯 {card.slot}</strong>
+                    <span>{formatPoints(card.points)}</span>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <section
             className={`overlay-section special-section ${
@@ -1196,39 +1409,61 @@ export function App() {
           >
             <h3>Special Cards</h3>
             <div className="overlay-row">
-              {(me?.specialCards ?? []).map((card, index) => (
-                <button
-                  key={`${card}-${index}`}
-                  className={`overlay-card special-card ${pendingAction?.kind === "specialCard" && pendingAction.cardType === card ? "is-selected" : ""} ${snapshot.viewer.turnHints.availableSpecialCards[card] ? "" : "is-unavailable"}`}
-                  disabled={
-                    !isMyTurn ||
-                    snapshot.viewer.turnHints.stage !== "secondaryAction" ||
-                    !snapshot.viewer.turnHints.availableSpecialCards[card]
-                  }
-                  onClick={() =>
-                    setPendingAction((current) =>
-                      current?.kind === "specialCard" && current.cardType === card
-                        ? null
-                        : { kind: "specialCard", cardType: card }
-                    )
-                  }
-                >
-                  <strong>{card}</strong>
-                  <span>
-                    {!isMyTurn
-                      ? "비활성화"
-                      : snapshot.viewer.turnHints.stage !== "secondaryAction"
-                        ? "1칸 이동 후"
-                        : snapshot.viewer.turnHints.availableSpecialCards[card]
-                          ? "대상 선택"
-                          : "현재 불가"}
-                  </span>
-                </button>
-              ))}
+              {ownedSpecialCards.length === 0 ? (
+                <span className="action-chip is-disabled">보유 중인 특수카드가 없습니다.</span>
+              ) : ownedSpecialCards.map((card) => {
+                const chargeCount = me?.specialInventory[card] ?? 0;
+                const isAvailable = snapshot.viewer.turnHints.availableSpecialCards[card];
+                const isDirectUse = card === "recoveryPotion";
+
+                return (
+                  <button
+                    key={card}
+                    className={`overlay-card special-card ${pendingAction?.kind === "specialCard" && pendingAction.cardType === card ? "is-selected" : ""} ${isAvailable ? "" : "is-unavailable"}`}
+                    data-testid="special-card-button"
+                    data-special-card={card}
+                    disabled={
+                      !isMyTurn ||
+                      snapshot.viewer.turnHints.stage !== "secondaryAction" ||
+                      !isAvailable
+                    }
+                    onClick={() => {
+                      if (isDirectUse) {
+                        void sendCommand({
+                          type: "match.useSpecialCard",
+                          cardType: card
+                        });
+                        return;
+                      }
+
+                      setPendingAction((current) =>
+                        current?.kind === "specialCard" && current.cardType === card
+                          ? null
+                          : { kind: "specialCard", cardType: card }
+                      );
+                    }}
+                  >
+                    <strong>{formatSpecialCardLabel(card)}</strong>
+                    <span>
+                      {chargeCount}회 남음
+                      {" · "}
+                      {!isMyTurn
+                        ? "비활성화"
+                        : snapshot.viewer.turnHints.stage !== "secondaryAction"
+                          ? "1칸 이동 후"
+                          : isAvailable
+                            ? SPECIAL_CARD_TARGET_HINTS[card]
+                            : "현재 불가"}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </section>
         </footer>
       ) : null}
+
+      {contextMenu ? <ContextMenu menu={contextMenu} onSelect={(action) => void handleMenuSelect(action)} /> : null}
     </main>
   );
 }

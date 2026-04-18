@@ -1,6 +1,7 @@
 import { DomainError } from "./errors.ts";
 import {
   BOARD_SIZE,
+  EMPTY_SPECIAL_CARD_INVENTORY,
   DEFAULT_MATCH_SETTINGS,
   DEFAULT_SPECIAL_CARD_DECK,
   PRIORITY_CARD_VALUES,
@@ -139,7 +140,7 @@ export function createMatchState(input: CreateMatchStateInput): MatchState {
           carriedTreasureId: null,
           openedTreasureIds: [],
           availablePriorityCards: [...PRIORITY_CARD_VALUES],
-          specialCards: [],
+          specialInventory: EMPTY_SPECIAL_CARD_INVENTORY,
           status: {
             fire: false,
             water: false,
@@ -151,6 +152,25 @@ export function createMatchState(input: CreateMatchStateInput): MatchState {
     })
   );
 
+  const configuredTreasureBoardSlots = [...(input.treasureBoardSlots ?? [])];
+
+  for (const slot of configuredTreasureBoardSlots) {
+    if (!Number.isInteger(slot) || slot <= 0) {
+      throw new DomainError(
+        "INVALID_POSITION",
+        "Treasure board slots must use positive integer ids."
+      );
+    }
+  }
+
+  if (new Set(configuredTreasureBoardSlots).size !== configuredTreasureBoardSlots.length) {
+    throw new DomainError(
+      "INVALID_POSITION",
+      "Treasure board slots must be unique."
+    );
+  }
+
+  const seenTreasureSlots = new Set<number>();
   const treasures = Object.fromEntries(
     (input.treasures ?? []).map((treasure, index): [string, TreasureState] => {
       const ownerPlayerId =
@@ -161,6 +181,24 @@ export function createMatchState(input: CreateMatchStateInput): MatchState {
           "INVALID_PLAYER_COUNT",
           "Treasures require an owning player."
         );
+      }
+
+      if (treasure.slot !== null) {
+        if (!Number.isInteger(treasure.slot) || treasure.slot <= 0) {
+          throw new DomainError(
+            "INVALID_POSITION",
+            `Treasure ${treasure.id} must use a positive integer slot id or null for a fake card.`
+          );
+        }
+
+        if (seenTreasureSlots.has(treasure.slot)) {
+          throw new DomainError(
+            "INVALID_POSITION",
+            `Treasure slot ${treasure.slot} is duplicated.`
+          );
+        }
+
+        seenTreasureSlots.add(treasure.slot);
       }
 
       if (treasure.position && !isWithinBoard(treasure.position)) {
@@ -186,6 +224,20 @@ export function createMatchState(input: CreateMatchStateInput): MatchState {
       ];
     })
   );
+  const treasureBoardSlots = (
+    configuredTreasureBoardSlots.length > 0
+      ? configuredTreasureBoardSlots
+      : [...seenTreasureSlots]
+  ).slice().sort((left, right) => left - right);
+
+  for (const slot of seenTreasureSlots) {
+    if (!treasureBoardSlots.includes(slot)) {
+      throw new DomainError(
+        "INVALID_POSITION",
+        `Treasure slot ${slot} is not registered on the treasure board.`
+      );
+    }
+  }
   const specialCardDeck = input.specialCardDeck ?? [...DEFAULT_SPECIAL_CARD_DECK];
 
   if (specialCardDeck.length === 0) {
@@ -205,6 +257,7 @@ export function createMatchState(input: CreateMatchStateInput): MatchState {
     board,
     players,
     playerOrder: input.players.map((player) => player.id),
+    treasureBoardSlots,
     treasures,
     round: {
       roundNumber: 1,

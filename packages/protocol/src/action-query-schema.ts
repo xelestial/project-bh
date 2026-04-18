@@ -1,9 +1,10 @@
-import type {
-  Position,
-  RotationDirection,
-  RotationSelection,
-  SpecialCardType,
-  TreasureId
+import {
+  SPECIAL_CARD_TYPES,
+  type Position,
+  type RotationDirection,
+  type RotationSelection,
+  type SpecialCardType,
+  type TreasureId
 } from "../../domain/src/index.ts";
 
 export interface PendingThrowAction {
@@ -43,6 +44,7 @@ export interface ActionCommandPayload {
     | "match.throwTile"
     | "match.rotateTiles"
     | "match.useSpecialCard"
+    | "match.purchaseSpecialCard"
     | "match.openTreasure"
     | "match.endTurn"
     | "match.prepareNextRound";
@@ -77,6 +79,10 @@ function isString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
+function isSpecialCardType(value: unknown): value is SpecialCardType {
+  return typeof value === "string" && SPECIAL_CARD_TYPES.includes(value as SpecialCardType);
+}
+
 function validatePosition(value: unknown): Position | null {
   if (!isRecord(value) || typeof value.x !== "number" || typeof value.y !== "number") {
     return null;
@@ -107,7 +113,7 @@ function validatePendingAction(value: unknown): PendingCellAction | undefined {
         ? { kind: "treasurePlacement", treasureId: value.treasureId }
         : undefined;
     case "specialCard": {
-      if (!isString(value.cardType)) {
+      if (!isSpecialCardType(value.cardType)) {
         return undefined;
       }
 
@@ -120,7 +126,7 @@ function validatePendingAction(value: unknown): PendingCellAction | undefined {
 
       return {
         kind: "specialCard",
-        cardType: value.cardType as SpecialCardType,
+        cardType: value.cardType,
         ...(firstPosition ? { firstPosition } : {})
       };
     }

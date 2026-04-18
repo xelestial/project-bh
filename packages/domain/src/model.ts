@@ -3,20 +3,53 @@ export const TOTAL_ROUNDS = 5;
 export const ROUND_OPEN_TREASURE_TARGET = 4;
 export const PRIORITY_CARD_VALUES = [1, 2, 3, 4, 5, 6] as const;
 export const AUCTION_CARD_DRAW_COUNT = 4;
+export const SPECIAL_CARD_TYPES = [
+  "coldBomb",
+  "flameBomb",
+  "electricBomb",
+  "largeHammer",
+  "fence",
+  "recoveryPotion",
+  "jump",
+  "hook"
+] as const;
+export const AUCTION_SPECIAL_CARD_TYPES = [
+  "coldBomb",
+  "flameBomb",
+  "electricBomb",
+  "largeHammer",
+  "recoveryPotion",
+  "jump",
+  "hook"
+] as const;
 export const DEFAULT_SPECIAL_CARD_DECK = [
   "coldBomb",
   "flameBomb",
   "electricBomb",
-  "hammer5",
-  "hammer6",
-  "fence",
+  "largeHammer",
+  "recoveryPotion",
+  "jump",
+  "hook",
   "coldBomb",
   "flameBomb",
   "electricBomb",
-  "hammer5",
-  "hammer6",
-  "fence"
+  "largeHammer",
+  "jump",
+  "hook"
 ] as const;
+export const SPECIAL_CARD_CHARGE_BUNDLE = {
+  coldBomb: 3,
+  flameBomb: 3,
+  electricBomb: 3,
+  largeHammer: 3,
+  fence: 3,
+  recoveryPotion: 1,
+  jump: 3,
+  hook: 2
+} as const;
+export const EMPTY_SPECIAL_CARD_INVENTORY = Object.freeze(
+  Object.fromEntries(SPECIAL_CARD_TYPES.map((cardType) => [cardType, 0]))
+) as Readonly<Record<(typeof SPECIAL_CARD_TYPES)[number], number>>;
 
 export interface RotationZone {
   readonly origin: Position;
@@ -52,13 +85,8 @@ export type TreasureId = string;
 export type Direction = "north" | "east" | "south" | "west";
 export type RotationDirection = "clockwise" | "counterclockwise";
 export type PriorityCard = (typeof PRIORITY_CARD_VALUES)[number];
-export type SpecialCardType =
-  | "coldBomb"
-  | "flameBomb"
-  | "electricBomb"
-  | "hammer5"
-  | "hammer6"
-  | "fence";
+export type SpecialCardType = (typeof SPECIAL_CARD_TYPES)[number];
+export type AuctionSpecialCardType = (typeof AUCTION_SPECIAL_CARD_TYPES)[number];
 export type TileKind =
   | "plain"
   | "fire"
@@ -127,6 +155,8 @@ export interface PlayerStatusState {
   readonly movementLimit: number | null;
 }
 
+export type SpecialCardInventory = Readonly<Record<SpecialCardType, number>>;
+
 export interface PlayerState {
   readonly id: PlayerId;
   readonly name: string;
@@ -139,13 +169,13 @@ export interface PlayerState {
   readonly carriedTreasureId: TreasureId | null;
   readonly openedTreasureIds: readonly TreasureId[];
   readonly availablePriorityCards: readonly PriorityCard[];
-  readonly specialCards: readonly SpecialCardType[];
+  readonly specialInventory: SpecialCardInventory;
   readonly status: PlayerStatusState;
 }
 
 export interface TreasureState {
   readonly id: TreasureId;
-  readonly slot: number;
+  readonly slot: number | null;
   readonly ownerPlayerId: PlayerId;
   readonly points: number;
   readonly initialPosition: Position | null;
@@ -157,7 +187,7 @@ export interface TreasureState {
 
 export interface AuctionOfferState {
   readonly slot: number;
-  readonly cardType: SpecialCardType;
+  readonly cardType: AuctionSpecialCardType;
 }
 
 export interface AuctionBidState {
@@ -211,9 +241,10 @@ export interface MatchState {
   readonly board: BoardState;
   readonly players: Readonly<Record<PlayerId, PlayerState>>;
   readonly playerOrder: readonly PlayerId[];
+  readonly treasureBoardSlots: readonly number[];
   readonly treasures: Readonly<Record<TreasureId, TreasureState>>;
   readonly round: RoundState;
-  readonly specialCardDeck: readonly SpecialCardType[];
+  readonly specialCardDeck: readonly AuctionSpecialCardType[];
   readonly specialCardDeckIndex: number;
   readonly completed: boolean;
   readonly result: MatchResult | null;
@@ -226,7 +257,7 @@ export interface PlayerDefinition {
 
 export interface TreasureDefinition {
   readonly id: TreasureId;
-  readonly slot: number;
+  readonly slot: number | null;
   readonly ownerPlayerId?: PlayerId;
   readonly points: number;
   readonly position?: Position;
@@ -237,7 +268,8 @@ export interface CreateMatchStateInput {
   readonly players: readonly PlayerDefinition[];
   readonly fences?: readonly FenceDefinition[];
   readonly settings?: Partial<MatchSettings>;
-  readonly specialCardDeck?: readonly SpecialCardType[];
+  readonly specialCardDeck?: readonly AuctionSpecialCardType[];
   readonly tiles?: readonly TileDefinition[];
+  readonly treasureBoardSlots?: readonly number[];
   readonly treasures?: readonly TreasureDefinition[];
 }

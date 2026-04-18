@@ -1,3 +1,6 @@
 node_modules/
 dist/
 .DS_Store
+.pnpm-store/
+test-results/
+.playwright-mcp/

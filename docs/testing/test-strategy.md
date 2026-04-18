@@ -23,9 +23,15 @@ Current coverage includes:
 - giant-flame normalization
 - square2 rotation with treasure movement
 - special-card board mutation and fence removal
+- large-hammer charged rotation
+- direct fence purchase during auction
+- recovery, jump, and hook special-card effects
 - next-round preparation and match completion
 - application-layer rejection mapping
 - protocol payload validation
+- browser smoke coverage for host-create, guest-join, treasure placement, sequential auction reveal, and right-click movement query
+- projector coverage for player-private treasure data and opener-only reveal behavior
+- HTTP integration coverage for public/private snapshot separation and unknown-room rejection safety
 
 ## Regression policy
 
@@ -40,7 +46,9 @@ Current coverage includes:
 - Every manual issue that changes rules behavior should become a regression test and, when reusable, an implementation-log entry.
 - GUI interaction regressions should be captured at two layers:
   - domain/application tests for legality
-  - browser-facing tests for right-click action query, move highlights, and overlay state once E2E coverage is added
+  - browser-facing smoke tests for treasure placement, sequential auction reveal, and right-click action query
+  - targeted UI tests for move highlights and overlay state when the shell gains a component-test harness
+  - snapshot-boundary tests that assert hidden information never leaks through either HTTP refresh or websocket room updates
 
 ## Planned next layers
 
@@ -48,4 +56,4 @@ Current coverage includes:
 2. Scenario fixtures for river, ice drop, elimination, and round-tick status behavior.
 3. Replay-oriented tests for full five-round command logs.
 4. UI component tests for the React playtest shell.
-5. Browser E2E coverage for the host-create, guest-join, start-match path.
+5. Expand browser smoke coverage to include special-card targeting, fence purchase, and next-round progression.

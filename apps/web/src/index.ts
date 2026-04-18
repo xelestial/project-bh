@@ -9,7 +9,7 @@ export interface MatchViewModel {
   readonly activePlayerId: string | null;
   readonly currentPlayerId: string;
   readonly currentPlayerScore: number;
-  readonly currentPlayerSpecialCards: readonly SpecialCardType[];
+  readonly currentPlayerSpecialInventory: Readonly<Record<SpecialCardType, number>>;
   readonly auctionOffers: readonly {
     slot: number;
     cardType: SpecialCardType;
@@ -67,7 +67,7 @@ function buildMatchViewModel(
     activePlayerId: snapshot.state.round.activePlayerId,
     currentPlayerId: playerId,
     currentPlayerScore: currentPlayer.score,
-    currentPlayerSpecialCards: currentPlayer.specialCards,
+    currentPlayerSpecialInventory: currentPlayer.specialInventory,
     auctionOffers: snapshot.state.round.auction.offers,
     players: Object.values(snapshot.state.players).map((player) => ({
       id: player.id,
@@ -202,6 +202,16 @@ export class LocalMatchClientAdapter {
       matchId: this.snapshot.state.matchId,
       playerId: this.playerId,
       ...input
+    });
+  }
+
+  public purchaseSpecialCard(cardType: SpecialCardType) {
+    return this.server.dispatchCommand(this.sessionId, {
+      type: "match.purchaseSpecialCard",
+      version: getCommandVersion() as 1,
+      matchId: this.snapshot.state.matchId,
+      playerId: this.playerId,
+      cardType
     });
   }
 

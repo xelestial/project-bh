@@ -95,6 +95,12 @@ export type DomainEvent =
       readonly cost: number;
     }
   | {
+      readonly type: "specialCardPurchased";
+      readonly playerId: PlayerId;
+      readonly cardType: SpecialCardType;
+      readonly cost: number;
+    }
+  | {
       readonly type: "specialCardUsed";
       readonly playerId: PlayerId;
       readonly cardType: SpecialCardType;

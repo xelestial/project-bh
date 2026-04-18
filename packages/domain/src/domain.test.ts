@@ -8,6 +8,7 @@ import {
   endTurn,
   moveActivePlayer,
   openCarriedTreasure,
+  purchaseSpecialCard,
   rotateTiles,
   prepareNextRound,
   submitPriorityCard,
@@ -93,7 +94,7 @@ test("auction bids award cards and deduct score when the auction resolves", () =
   assert.equal(second.state.round.phase, "auction");
   assert.equal(second.state.round.auction.currentOfferIndex, 1);
   assert.equal(playerOne.score, 1);
-  assert.equal(playerOne.specialCards.length, 1);
+  assert.equal(playerOne.specialInventory.coldBomb, 3);
   assert.ok(second.events.some((event) => event.type === "auctionResolved"));
 });
 
@@ -300,6 +301,49 @@ test("rotating a 2x2 selection moves both tiles and treasures", () => {
   assert.equal(result.state.round.activePlayerId, "player-2");
 });
 
+test("large hammer unlocks cross rotations and consumes one charge", () => {
+  const match = createTwoPlayerMatchFixture({
+    treasures: [],
+    tiles: [
+      { position: createPosition(2, 1), kind: "fire" },
+      { position: createPosition(3, 2), kind: "electric" }
+    ]
+  });
+  const stepped = moveActivePlayer(match, "player-1", "south").state;
+  const prepared = replacePlayer(stepped, "player-1", (player) => ({
+    ...player,
+    specialInventory: {
+      ...player.specialInventory,
+      largeHammer: 1
+    }
+  }));
+  const result = useSpecialCard(prepared, {
+    playerId: "player-1",
+    cardType: "largeHammer",
+    selection: {
+      kind: "cross5",
+      center: createPosition(2, 2)
+    },
+    direction: "clockwise"
+  });
+  const updatedPlayer = mustPlayer(result.state, "player-1");
+
+  assert.equal(result.state.board.tiles["3,2"]?.kind, "fire");
+  assert.equal(result.state.board.tiles["2,3"]?.kind, "electric");
+  assert.equal(updatedPlayer.specialInventory.largeHammer, 0);
+  assert.equal(result.state.round.activePlayerId, "player-2");
+});
+
+test("fence cards can be bought directly during the auction for one point", () => {
+  const match = createAuctionFixture();
+  const result = purchaseSpecialCard(match, "player-1", "fence");
+  const playerOne = mustPlayer(result.state, "player-1");
+
+  assert.equal(playerOne.score, 2);
+  assert.equal(playerOne.specialInventory.fence, 3);
+  assert.ok(result.events.some((event) => event.type === "specialCardPurchased"));
+});
+
 test("special card bombs can modify the board and remove fences", () => {
   const match = createTwoPlayerMatchFixture({
     tiles: [{ position: createPosition(2, 2), kind: "water" }],
@@ -313,7 +357,10 @@ test("special card bombs can modify the board and remove fences", () => {
       ...match.players,
       "player-1": {
         ...playerOne,
-        specialCards: [...playerOne.specialCards, "flameBomb"]
+        specialInventory: {
+          ...playerOne.specialInventory,
+          flameBomb: 1
+        }
       }
     },
     board: {
@@ -335,6 +382,97 @@ test("special card bombs can modify the board and remove fences", () => {
 
   assert.equal(result.state.board.tiles["2,2"]?.kind, "fire");
   assert.equal(result.state.board.fences["fence-a"], undefined);
+  assert.equal(result.state.round.activePlayerId, "player-2");
+});
+
+test("recovery potion clears status effects and restores full hp", () => {
+  const match = createTwoPlayerMatchFixture({
+    treasures: []
+  });
+  const stepped = moveActivePlayer(match, "player-1", "south").state;
+  const prepared = replacePlayer(stepped, "player-1", (player) => ({
+    ...player,
+    hitPoints: 4,
+    specialInventory: {
+      ...player.specialInventory,
+      recoveryPotion: 1
+    },
+    status: {
+      fire: true,
+      water: true,
+      skipNextTurnCount: 1,
+      movementLimit: 1
+    }
+  }));
+  const result = useSpecialCard(prepared, {
+    playerId: "player-1",
+    cardType: "recoveryPotion"
+  });
+  const refreshedPlayer = mustPlayer(result.state, "player-1");
+
+  assert.equal(refreshedPlayer.hitPoints, result.state.settings.startingHitPoints);
+  assert.deepEqual(refreshedPlayer.status, {
+    fire: false,
+    water: false,
+    skipNextTurnCount: 0,
+    movementLimit: null
+  });
+  assert.equal(refreshedPlayer.specialInventory.recoveryPotion, 0);
+  assert.equal(result.state.round.activePlayerId, "player-2");
+});
+
+test("jump moves exactly two tiles and ends the turn", () => {
+  const match = createTwoPlayerMatchFixture({
+    treasures: []
+  });
+  const stepped = moveActivePlayer(match, "player-1", "south").state;
+  const prepared = replacePlayer(stepped, "player-1", (player) => ({
+    ...player,
+    specialInventory: {
+      ...player.specialInventory,
+      jump: 1
+    }
+  }));
+  const result = useSpecialCard(prepared, {
+    playerId: "player-1",
+    cardType: "jump",
+    targetPosition: createPosition(2, 1)
+  });
+  const movedPlayer = mustPlayer(result.state, "player-1");
+
+  assert.deepEqual(movedPlayer.position, createPosition(2, 1));
+  assert.equal(movedPlayer.specialInventory.jump, 0);
+  assert.equal(result.state.round.activePlayerId, "player-2");
+});
+
+test("hook moves the player next to a straight-line target", () => {
+  const match = createTwoPlayerMatchFixture({
+    treasures: []
+  });
+  const stepped = moveActivePlayer(match, "player-1", "south").state;
+  const prepared = replacePlayer(
+    replacePlayer(stepped, "player-1", (player) => ({
+      ...player,
+      specialInventory: {
+        ...player.specialInventory,
+        hook: 1
+      }
+    })),
+    "player-2",
+    (player) => ({
+      ...player,
+      position: createPosition(3, 1)
+    })
+  );
+  const result = useSpecialCard(prepared, {
+    playerId: "player-1",
+    cardType: "hook",
+    targetPlayerId: "player-2"
+  });
+  const movedPlayer = mustPlayer(result.state, "player-1");
+
+  assert.deepEqual(movedPlayer.position, createPosition(2, 1));
+  assert.equal(movedPlayer.specialInventory.hook, 0);
   assert.equal(result.state.round.activePlayerId, "player-2");
 });
 

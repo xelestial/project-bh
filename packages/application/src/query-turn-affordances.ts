@@ -1,5 +1,6 @@
 import {
   DomainError,
+  SPECIAL_CARD_TYPES,
   endTurn,
   moveActivePlayer,
   movePosition,
@@ -18,14 +19,6 @@ import {
 const CARDINAL_DIRECTIONS: readonly Direction[] = ["north", "east", "south", "west"];
 const ROTATION_DIRECTIONS = ["clockwise", "counterclockwise"] as const;
 const RECTANGLE_ORIENTATIONS = ["horizontal", "vertical"] as const;
-const SPECIAL_CARD_TYPES = [
-  "coldBomb",
-  "flameBomb",
-  "electricBomb",
-  "hammer5",
-  "hammer6",
-  "fence"
-] as const satisfies readonly SpecialCardType[];
 
 export interface TurnAffordances {
   readonly active: boolean;
@@ -212,8 +205,8 @@ function canUseSpecialCardType(
     );
   }
 
-  if (cardType === "hammer5") {
-    return listBoardPositions(match).some((center) =>
+  if (cardType === "largeHammer") {
+    const hasCrossRotation = listBoardPositions(match).some((center) =>
       ROTATION_DIRECTIONS.some((direction) =>
         tryCommand(() =>
           useSpecialCard(match, {
@@ -228,9 +221,11 @@ function canUseSpecialCardType(
         )
       )
     );
-  }
 
-  if (cardType === "hammer6") {
+    if (hasCrossRotation) {
+      return true;
+    }
+
     return listBoardPositions(match).some((origin) =>
       RECTANGLE_ORIENTATIONS.some((orientation) =>
         ROTATION_DIRECTIONS.some((direction) =>
@@ -249,6 +244,43 @@ function canUseSpecialCardType(
         )
       )
     );
+  }
+
+  if (cardType === "recoveryPotion") {
+    return tryCommand(() =>
+      useSpecialCard(match, {
+        playerId,
+        cardType
+      })
+    );
+  }
+
+  if (cardType === "jump") {
+    return listBoardPositions(match).some((targetPosition) =>
+      tryCommand(() =>
+        useSpecialCard(match, {
+          playerId,
+          cardType,
+          targetPosition
+        })
+      )
+    );
+  }
+
+  if (cardType === "hook") {
+    return Object.values(match.players).some((targetPlayer) => {
+      if (targetPlayer.id === playerId) {
+        return false;
+      }
+
+      return tryCommand(() =>
+        useSpecialCard(match, {
+          playerId,
+          cardType,
+          targetPlayerId: targetPlayer.id
+        })
+      );
+    });
   }
 
   return listBoardPositions(match).some((firstPosition) =>
@@ -308,7 +340,7 @@ export function queryTurnAffordances(
   const availableSpecialCards = Object.fromEntries(
     SPECIAL_CARD_TYPES.map((cardType) => [
       cardType,
-      player.specialCards.includes(cardType) && canUseSpecialCardType(match, playerId, cardType)
+      player.specialInventory[cardType] > 0 && canUseSpecialCardType(match, playerId, cardType)
     ])
   ) as Readonly<Record<SpecialCardType, boolean>>;
   const hasSpecialCardAction = Object.values(availableSpecialCards).some(Boolean);

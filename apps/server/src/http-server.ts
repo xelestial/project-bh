@@ -173,72 +173,73 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
     response.setHeader("Access-Control-Allow-Headers", "Content-Type");
     response.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
 
-    if (request.method === "OPTIONS") {
-      response.statusCode = 204;
-      response.end();
-      return;
-    }
-
-    if (!request.url) {
-      writeJson(response, 400, { error: "Missing URL." });
-      return;
-    }
-
-    const url = new URL(request.url, `http://${request.headers.host ?? "localhost"}`);
-
-    if (request.method === "GET" && url.pathname === "/health") {
-      writeJson(response, 200, { ok: true });
-      return;
-    }
-
-    if (request.method === "POST" && url.pathname === "/api/rooms") {
-      const body = await readJson<CreateRoomRequest>(request);
-
-      if (!body.name || !body.playerCount || body.playerCount < 2 || body.playerCount > 4) {
-        writeJson(response, 400, { error: "name and playerCount(2-4) are required." });
+    try {
+      if (request.method === "OPTIONS") {
+        response.statusCode = 204;
+        response.end();
         return;
       }
 
-      const roomId = randomUUID().slice(0, 8);
-      const hostPlayerId = randomUUID().slice(0, 8);
-      const room: MutableRoom = {
-        roomId,
-        inviteCode: createInviteCode(),
-        hostPlayerId,
-        desiredPlayerCount: body.playerCount,
-        players: [{ id: hostPlayerId, name: body.name }],
-        status: "lobby",
-        sessionId: null,
-        sockets: new Map()
-      };
-      rooms.set(roomId, room);
-      writeJson(response, 201, {
-        room: toRoomState(room),
-        playerId: hostPlayerId
-      });
-      return;
-    }
-
-    if (request.method === "GET" && /^\/api\/invite\/[^/]+$/.test(url.pathname)) {
-      const inviteCode = url.pathname.split("/")[3];
-
-      if (!inviteCode) {
-        writeJson(response, 400, { error: "Missing invite code." });
+      if (!request.url) {
+        writeJson(response, 400, { error: "Missing URL." });
         return;
       }
 
-      const room = findRoomByInviteCode(inviteCode);
+      const url = new URL(request.url, `http://${request.headers.host ?? "localhost"}`);
 
-      if (!room) {
-        writeJson(response, 404, { error: "Unknown invite code." });
+      if (request.method === "GET" && url.pathname === "/health") {
+        writeJson(response, 200, { ok: true });
         return;
       }
 
-      writeJson(response, 200, {
-        room: toRoomState(room)
-      });
-      return;
-    }
+      if (request.method === "POST" && url.pathname === "/api/rooms") {
+        const body = await readJson<CreateRoomRequest>(request);
+
+        if (!body.name || !body.playerCount || body.playerCount < 2 || body.playerCount > 4) {
+          writeJson(response, 400, { error: "name and playerCount(2-4) are required." });
+          return;
+        }
+
+        const roomId = randomUUID().slice(0, 8);
+        const hostPlayerId = randomUUID().slice(0, 8);
+        const room: MutableRoom = {
+          roomId,
+          inviteCode: createInviteCode(),
+          hostPlayerId,
+          desiredPlayerCount: body.playerCount,
+          players: [{ id: hostPlayerId, name: body.name }],
+          status: "lobby",
+          sessionId: null,
+          sockets: new Map()
+        };
+        rooms.set(roomId, room);
+        writeJson(response, 201, {
+          room: toRoomState(room),
+          playerId: hostPlayerId
+        });
+        return;
+      }
+
+      if (request.method === "GET" && /^\/api\/invite\/[^/]+$/.test(url.pathname)) {
+        const inviteCode = url.pathname.split("/")[3];
+
+        if (!inviteCode) {
+          writeJson(response, 400, { error: "Missing invite code." });
+          return;
+        }
+
+        const room = findRoomByInviteCode(inviteCode);
+
+        if (!room) {
+          writeJson(response, 404, { error: "Unknown invite code." });
+          return;
+        }
+
+        writeJson(response, 200, {
+          room: toRoomState(room)
+        });
+        return;
+      }
 
     if (request.method === "POST" && /^\/api\/invite\/[^/]+\/join$/.test(url.pathname)) {
       const inviteCode = url.pathname.split("/")[3];
@@ -344,9 +345,21 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
         return;
       }
 
+      const nextSessionId = `session-${room.roomId}`;
+      let matchInput: CreateMatchStateInput;
+
+      try {
+        matchInput = buildMatchInput(room);
+        engine.createSession(nextSessionId, matchInput);
+      } catch (error) {
+        writeJson(response, 400, {
+          error: error instanceof Error ? error.message : "Unable to start the room."
+        });
+        return;
+      }
+
       room.status = "started";
-      room.sessionId = `session-${room.roomId}`;
-      engine.createSession(room.sessionId, buildMatchInput(room));
+      room.sessionId = nextSessionId;
       broadcastRoom(roomId);
       writeJson(response, 200, {
         room: toRoomState(room),
@@ -412,8 +425,8 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
       return;
     }
 
-    if (request.method === "POST" && /^\/api\/rooms\/[^/]+\/commands$/.test(url.pathname)) {
-      const roomId = url.pathname.split("/")[3];
+      if (request.method === "POST" && /^\/api\/rooms\/[^/]+\/commands$/.test(url.pathname)) {
+        const roomId = url.pathname.split("/")[3];
 
       if (!roomId) {
         writeJson(response, 400, { error: "Missing room id." });
@@ -440,11 +453,19 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
           viewerPlayerId !== null
             ? projectSnapshotForPlayer(engine.getSnapshot(room.sessionId), viewerPlayerId)
             : null
-      });
-      return;
-    }
+        });
+        return;
+      }
 
-    writeJson(response, 404, { error: "Not found." });
+      writeJson(response, 404, { error: "Not found." });
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("Unknown room:")) {
+        writeJson(response, 404, { error: error.message });
+        return;
+      }
+
+      throw error;
+    }
   });
 
   websocketServer.on("connection", (socket: WebSocket, _request: IncomingMessage, connectionContext: unknown) => {
@@ -525,17 +546,33 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
   return {
     port: address.port,
     host,
-    close: async () =>
+    close: async () => {
+      for (const room of rooms.values()) {
+        for (const sockets of room.sockets.values()) {
+          for (const socket of sockets) {
+            socket.terminate();
+          }
+        }
+      }
+
       await new Promise<void>((resolve, reject) => {
-        server.close((error) => {
-          if (error) {
-            reject(error);
+        websocketServer.close((websocketError) => {
+          if (websocketError) {
+            reject(websocketError);
             return;
           }
 
-          resolve();
+          server.close((serverError) => {
+            if (serverError) {
+              reject(serverError);
+              return;
+            }
+
+            resolve();
+          });
         });
-      })
+      });
+    }
   };
 }
 

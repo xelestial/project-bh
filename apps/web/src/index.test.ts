@@ -17,12 +17,15 @@ test("web client adapter tracks authoritative snapshots and exposes a view model
   const client = web.createClient(server, "session-web", "player-1");
   const otherClient = web.createClient(server, "session-web", "player-2");
 
-  client.submitAuctionBids([]);
-  otherClient.submitAuctionBids([]);
+  while (client.getSnapshot().state.round.phase === "auction") {
+    client.submitAuctionBids([]);
+    otherClient.submitAuctionBids([]);
+  }
 
   const afterAuction = client.getViewModel();
   assert.equal(afterAuction.phase, "prioritySubmission");
   assert.equal(afterAuction.currentPlayerId, "player-1");
+  assert.equal(afterAuction.currentPlayerSpecialInventory.fence, 0);
 
   client.submitPriority(6);
   otherClient.submitPriority(5);

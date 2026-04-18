@@ -40,3 +40,33 @@ test("turn affordances expose secondary options after the first move", () => {
     { x: 0, y: 2 }
   ]);
 });
+
+test("turn affordances expose owned charged special cards", () => {
+  const match = createTwoPlayerMatchFixture({
+    treasures: []
+  });
+  const stepped = moveActivePlayer(match, "player-1", "south").state;
+  const playerOne = stepped.players["player-1"];
+
+  assert.ok(playerOne);
+
+  const prepared = {
+    ...stepped,
+    players: {
+      ...stepped.players,
+      "player-1": {
+        ...playerOne,
+        specialInventory: {
+          ...playerOne.specialInventory,
+          jump: 1
+        }
+      }
+    }
+  };
+
+  const result = queryTurnAffordances(prepared, "player-1");
+
+  assert.equal(result.availableSecondaryActions.specialCard, true);
+  assert.equal(result.availableSpecialCards.jump, true);
+  assert.equal(result.availableSpecialCards.recoveryPotion, false);
+});

@@ -4,6 +4,7 @@ import {
   moveActivePlayer,
   openCarriedTreasure,
   placeTreasure,
+  purchaseSpecialCard,
   prepareNextRound,
   rotateTiles,
   submitAuctionBids,
@@ -106,6 +107,11 @@ export function handleMatchCommand(
         }
 
         const result = useSpecialCard(state, input);
+        return success(result.state, result.events);
+      }
+
+      case "match.purchaseSpecialCard": {
+        const result = purchaseSpecialCard(state, command.playerId, command.cardType);
         return success(result.state, result.events);
       }
 

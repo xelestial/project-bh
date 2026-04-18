@@ -50,12 +50,16 @@ The current baseline now covers:
 - throwable fire, water, and electric tiles
 - basic fire, water, electric, ice, giant-flame, and river state transitions
 - fence placement and fence-aware movement/rotation constraints
-- special-card use for bombs, hammers, and fences
+- charged special-card inventory, fence auction purchases, and special-card use for bombs, hammers, recovery, jump, hook, and fences
 - 2x2, cross-5, and rectangle-6 rotation transforms
 - next-round preparation and match-completion calculation
 - protocol validation for the current command set
 - in-memory authoritative session management
 - local client adapter and view-model composition
+- player-private snapshot projection for hidden treasure data
+- explicit public/private snapshot boundaries
+  - public state contains only shared board, round, score, and occupancy data
+  - viewer state contains private inventory, hand, and opened-treasure details for one player only
 
 ## Near-term build order
 

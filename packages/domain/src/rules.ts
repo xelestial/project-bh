@@ -18,6 +18,7 @@ import type {
   MatchResult,
   PlayerId,
   PlayerState,
+  PlayerStatusState,
   Position,
   PriorityCard,
   RotationDirection,
@@ -30,7 +31,9 @@ import type {
   TileKind
 } from "./model.ts";
 import {
+  EMPTY_SPECIAL_CARD_INVENTORY,
   PRIORITY_CARD_VALUES,
+  SPECIAL_CARD_CHARGE_BUNDLE,
   type MatchSettings
 } from "./model.ts";
 import { resolvePriorityTurnOrder } from "./priority.ts";
@@ -344,7 +347,9 @@ function isTreasureInsideRotationZone(
 }
 
 function areAllRoundTreasuresPlaced(match: MatchState): boolean {
-  return Object.values(match.treasures).every((treasure) => treasure.position !== null);
+  return Object.values(match.treasures).every((treasure) => {
+    return treasure.slot === null || treasure.position !== null;
+  });
 }
 
 function activateTurn(
@@ -809,6 +814,13 @@ export function placeTreasure(
     );
   }
 
+  if (treasure.slot === null) {
+    throw new DomainError(
+      "TREASURE_PLACEMENT_NOT_ALLOWED",
+      "Fake treasure cards do not have a matching board token to place."
+    );
+  }
+
   if (!isWithinBoard(input.position)) {
     throw new DomainError("OUT_OF_BOUNDS", "Treasure placement must stay inside the board.");
   }
@@ -992,11 +1004,16 @@ export function submitAuctionBids(
 
   if (winner) {
     const awardedPlayer = getPlayerOrThrow(nextMatch, winner.playerId);
-    nextMatch = updatePlayer(nextMatch, {
-      ...awardedPlayer,
-      score: awardedPlayer.score - winner.amount,
-      specialCards: [...awardedPlayer.specialCards, currentOffer.cardType]
-    });
+    nextMatch = updatePlayer(
+      nextMatch,
+      addSpecialCardToPlayer(
+        {
+          ...awardedPlayer,
+          score: awardedPlayer.score - winner.amount
+        },
+        currentOffer.cardType
+      )
+    );
     events.push({
       type: "specialCardAwarded",
       playerId: winner.playerId,
@@ -1621,11 +1638,12 @@ export function rotateTiles(
 
 function removeSpecialCardFromPlayer(
   player: PlayerState,
-  cardType: SpecialCardType
+  cardType: SpecialCardType,
+  chargeCost = 1
 ): PlayerState {
-  const index = player.specialCards.indexOf(cardType);
+  const currentCharges = player.specialInventory[cardType];
 
-  if (index === -1) {
+  if (currentCharges < chargeCost) {
     throw new DomainError(
       "SPECIAL_CARD_NOT_OWNED",
       "The player does not own the requested special card."
@@ -1634,7 +1652,188 @@ function removeSpecialCardFromPlayer(
 
   return {
     ...player,
-    specialCards: player.specialCards.filter((_, candidateIndex) => candidateIndex !== index)
+    specialInventory: {
+      ...player.specialInventory,
+      [cardType]: currentCharges - chargeCost
+    }
+  };
+}
+
+function addSpecialCardToPlayer(
+  player: PlayerState,
+  cardType: SpecialCardType
+): PlayerState {
+  return {
+    ...player,
+    specialInventory: {
+      ...player.specialInventory,
+      [cardType]: player.specialInventory[cardType] + SPECIAL_CARD_CHARGE_BUNDLE[cardType]
+    }
+  };
+}
+
+function createClearedStatusState(): PlayerStatusState {
+  return {
+    fire: false,
+    water: false,
+    skipNextTurnCount: 0,
+    movementLimit: null
+  };
+}
+
+function getOppositeDirection(direction: Direction): Direction {
+  switch (direction) {
+    case "north":
+      return "south";
+    case "east":
+      return "west";
+    case "south":
+      return "north";
+    case "west":
+      return "east";
+  }
+}
+
+function resolveSpecialMovement(
+  match: MatchState,
+  playerId: PlayerId,
+  nextPosition: Position
+): DomainMutationResult {
+  const player = getPlayerOrThrow(match, playerId);
+  const direction = cardinalDirectionBetween(player.position, nextPosition);
+
+  if (!direction || !isWithinBoard(nextPosition)) {
+    throw new DomainError(
+      "INVALID_SPECIAL_CARD_TARGET",
+      "Special movement must resolve to an in-bounds straight-line destination."
+    );
+  }
+
+  if (isFenceBlockingPosition(match.board, nextPosition)) {
+    throw new DomainError(
+      "MOVEMENT_BLOCKED_BY_FENCE",
+      "Players cannot end special movement on a fenced tile."
+    );
+  }
+
+  let nextMatch = updatePlayer(match, {
+    ...player,
+    position: nextPosition
+  });
+  const events: DomainEvent[] = [
+    {
+      type: "playerMoved",
+      playerId,
+      from: player.position,
+      to: nextPosition,
+      direction
+    }
+  ];
+
+  const tileEffect = applyTileEffectToPlayer(
+    nextMatch,
+    playerId,
+    getTileKind(nextMatch.board, nextPosition),
+    true
+  );
+  nextMatch = tileEffect.state;
+  events.push(...tileEffect.events);
+
+  const movedPlayer = getPlayerOrThrow(nextMatch, playerId);
+  const treasure = findTreasureAtPosition(nextMatch, nextPosition);
+
+  if (treasure && movedPlayer.carriedTreasureId === null) {
+    const pickedUpTreasure: TreasureState = {
+      ...treasure,
+      position: null,
+      carriedByPlayerId: playerId
+    };
+    nextMatch = updatePlayer(nextMatch, {
+      ...movedPlayer,
+      carriedTreasureId: pickedUpTreasure.id
+    });
+    nextMatch = updateTreasure(nextMatch, pickedUpTreasure);
+    events.push({
+      type: "treasurePickedUp",
+      playerId,
+      treasureId: pickedUpTreasure.id,
+      position: nextPosition
+    });
+
+    const turnAdvance = advanceTurn(nextMatch, playerId);
+    return {
+      state: turnAdvance.state,
+      events: [...events, ...turnAdvance.events]
+    };
+  }
+
+  if (tileEffect.endsTurnImmediately || getPlayerOrThrow(nextMatch, playerId).eliminated) {
+    const turnAdvance = advanceTurn(nextMatch, playerId);
+    return {
+      state: turnAdvance.state,
+      events: [...events, ...turnAdvance.events]
+    };
+  }
+
+  const turnAdvance = advanceTurn(nextMatch, playerId);
+  return {
+    state: turnAdvance.state,
+    events: [...events, ...turnAdvance.events]
+  };
+}
+
+export function purchaseSpecialCard(
+  match: MatchState,
+  playerId: PlayerId,
+  cardType: SpecialCardType
+): DomainMutationResult {
+  assertAuctionPhase(match);
+
+  if (cardType !== "fence") {
+    throw new DomainError(
+      "INVALID_SPECIAL_CARD_TARGET",
+      "Only fence cards may be purchased directly during the auction phase."
+    );
+  }
+
+  const player = getPlayerOrThrow(match, playerId);
+
+  if (player.eliminated) {
+    throw new DomainError("PLAYER_ELIMINATED", "Eliminated players cannot buy special cards.");
+  }
+
+  if (match.round.auction.submittedBids[playerId] !== null) {
+    throw new DomainError(
+      "AUCTION_BID_ALREADY_SUBMITTED",
+      "Fence cards must be purchased before the current auction bid is submitted."
+    );
+  }
+
+  if (player.score < 1) {
+    throw new DomainError(
+      "INVALID_AUCTION_BID",
+      "A player needs at least 1 score to buy a fence card."
+    );
+  }
+
+  const updatedPlayer = addSpecialCardToPlayer(
+    {
+      ...player,
+      score: player.score - 1
+    },
+    cardType
+  );
+
+  return {
+    state: updatePlayer(match, updatedPlayer),
+    events: [
+      {
+        type: "specialCardPurchased",
+        playerId,
+        cardType,
+        cost: 1
+      }
+    ]
   };
 }
 
@@ -1654,21 +1853,21 @@ export function useSpecialCard(
     }
   ];
 
-  if (input.cardType === "hammer5" || input.cardType === "hammer6") {
+  if (input.cardType === "largeHammer") {
     if (!input.selection || !input.direction) {
       throw new DomainError(
         "INVALID_SPECIAL_CARD_TARGET",
-        "Hammer cards require a rotation selection and direction."
+        "Large hammer cards require a rotation selection and direction."
       );
     }
 
     if (
-      (input.cardType === "hammer5" && input.selection.kind !== "cross5") ||
-      (input.cardType === "hammer6" && input.selection.kind !== "rectangle6")
+      input.selection.kind !== "cross5" &&
+      input.selection.kind !== "rectangle6"
     ) {
       throw new DomainError(
         "INVALID_SPECIAL_CARD_TARGET",
-        "Hammer cards must match the rotation shape they unlock."
+        "Large hammer cards may only unlock cross5 or rectangle6 rotations."
       );
     }
 
@@ -1722,7 +1921,7 @@ export function useSpecialCard(
   if (input.cardType === "coldBomb") {
     if (input.targetPlayerId) {
       const target = getPlayerOrThrow(nextMatch, input.targetPlayerId);
-      let updatedTarget: PlayerState = {
+      const updatedTarget: PlayerState = {
         ...target,
         status: {
           ...target.status,
@@ -1731,12 +1930,6 @@ export function useSpecialCard(
       };
       nextMatch = updatePlayer(nextMatch, updatedTarget);
       events.push(createStatusChangedEvent(updatedTarget));
-
-      if (getTileKind(nextMatch.board, target.position) === "water") {
-        const effect = applyTileEffectToPlayer(nextMatch, target.id, "ice", false);
-        nextMatch = effect.state;
-        events.push(...effect.events);
-      }
     } else if (input.targetPosition) {
       if (getTileKind(nextMatch.board, input.targetPosition) !== "water") {
         throw new DomainError(
@@ -1754,6 +1947,23 @@ export function useSpecialCard(
         "Cold bombs require a target player or target position."
       );
     }
+  }
+
+  if (input.cardType === "recoveryPotion") {
+    const refreshedPlayer = getPlayerOrThrow(nextMatch, input.playerId);
+    const updatedPlayer: PlayerState = {
+      ...refreshedPlayer,
+      hitPoints: nextMatch.settings.startingHitPoints,
+      status: createClearedStatusState()
+    };
+    nextMatch = updatePlayer(nextMatch, updatedPlayer);
+    events.push({
+      type: "playerDamaged",
+      playerId: input.playerId,
+      amount: 0,
+      remainingHitPoints: updatedPlayer.hitPoints
+    });
+    events.push(createStatusChangedEvent(updatedPlayer));
   }
 
   if (input.cardType === "flameBomb" || input.cardType === "electricBomb") {
@@ -1804,6 +2014,65 @@ export function useSpecialCard(
       nextMatch = effect.state;
       events.push(...effect.events);
     }
+  }
+
+  if (input.cardType === "jump") {
+    if (!input.targetPosition) {
+      throw new DomainError(
+        "INVALID_SPECIAL_CARD_TARGET",
+        "Jump cards require a target destination."
+      );
+    }
+
+    const currentPlayer = getPlayerOrThrow(nextMatch, input.playerId);
+    const jumpDirection = cardinalDirectionBetween(currentPlayer.position, input.targetPosition);
+
+    if (
+      !jumpDirection ||
+      cardinalLineDistance(currentPlayer.position, input.targetPosition) !== 2
+    ) {
+      throw new DomainError(
+        "INVALID_SPECIAL_CARD_TARGET",
+        "Jump cards must land exactly two tiles away in a straight line."
+      );
+    }
+
+    const movement = resolveSpecialMovement(nextMatch, input.playerId, input.targetPosition);
+    return {
+      state: movement.state,
+      events: [...events, ...movement.events]
+    };
+  }
+
+  if (input.cardType === "hook") {
+    if (!input.targetPlayerId) {
+      throw new DomainError(
+        "INVALID_SPECIAL_CARD_TARGET",
+        "Hook cards require a player target."
+      );
+    }
+
+    const sourcePlayer = getPlayerOrThrow(nextMatch, input.playerId);
+    const targetPlayer = getPlayerOrThrow(nextMatch, input.targetPlayerId);
+    const hookDirection = cardinalDirectionBetween(sourcePlayer.position, targetPlayer.position);
+    const targetDistance = cardinalLineDistance(sourcePlayer.position, targetPlayer.position);
+
+    if (!hookDirection || targetDistance === null || targetDistance < 2 || targetDistance > 4) {
+      throw new DomainError(
+        "INVALID_SPECIAL_CARD_TARGET",
+        "Hook cards require a player two to four tiles away in a straight line."
+      );
+    }
+
+    const landingPosition = movePosition(
+      targetPlayer.position,
+      getOppositeDirection(hookDirection)
+    );
+    const movement = resolveSpecialMovement(nextMatch, input.playerId, landingPosition);
+    return {
+      state: movement.state,
+      events: [...events, ...movement.events]
+    };
   }
 
   const turnAdvance = advanceTurn(nextMatch, input.playerId);

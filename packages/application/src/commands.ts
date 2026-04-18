@@ -75,6 +75,14 @@ export interface UseSpecialCardCommand {
   readonly direction?: RotationDirection;
 }
 
+export interface PurchaseSpecialCardCommand {
+  readonly type: "match.purchaseSpecialCard";
+  readonly version: 1;
+  readonly matchId: string;
+  readonly playerId: PlayerId;
+  readonly cardType: SpecialCardType;
+}
+
 export interface OpenTreasureCommand {
   readonly type: "match.openTreasure";
   readonly version: 1;
@@ -105,6 +113,7 @@ export type MatchCommand =
   | ThrowTileCommand
   | RotateTilesCommand
   | UseSpecialCardCommand
+  | PurchaseSpecialCardCommand
   | OpenTreasureCommand
   | EndTurnCommand
   | PrepareNextRoundCommand;

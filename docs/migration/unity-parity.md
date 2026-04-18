@@ -17,9 +17,10 @@ The first parity targets should be:
 2. priority-card submission and deterministic turn order
 3. mandatory-step plus secondary-action turn flow
 4. treasure pickup and open flow
+   - including hidden slot-to-score mapping and fake-card handling
 5. fire, water, and electric tile interactions
-6. auction resolution and special-card ownership updates
-7. square2, cross5, and rectangle6 rotation transforms
+6. auction resolution, fence purchases, and charged special-card inventory updates
+7. square2 plus large-hammer cross5 and rectangle6 rotation transforms
 8. round completion after the fourth opened treasure
 9. next-round preparation and final match result calculation
 
@@ -29,5 +30,7 @@ The first parity targets should be:
 - tile interaction golden cases
 - rotation golden cases
 - auction and special-card scenario fixtures
+- charged-inventory projection samples for the player HUD
 - protocol snapshot samples
 - server rejection catalogs
+- player-private treasure projection samples for Unity client parity checks

@@ -474,7 +474,7 @@ label {
 
 .context-menu {
   position: fixed;
-  z-index: 20;
+  z-index: 200;
   display: grid;
   gap: 0.25rem;
   min-width: 210px;

@@ -13,6 +13,7 @@ Current client-to-server commands:
 - `match.throwTile`
 - `match.rotateTiles`
 - `match.useSpecialCard`
+- `match.purchaseSpecialCard`
 - `match.openTreasure`
 - `match.endTurn`
 - `match.prepareNextRound`
@@ -62,15 +63,22 @@ Each command currently requires:
   - `coldBomb`
   - `flameBomb`
   - `electricBomb`
-  - `hammer5`
-  - `hammer6`
+  - `largeHammer`
   - `fence`
+  - `recoveryPotion`
+  - `jump`
+  - `hook`
 - and then card-specific targeting data:
   - `targetPosition`
   - `targetPlayerId`
   - `fencePositions`
   - `selection`
   - `direction`
+
+`match.purchaseSpecialCard` also requires:
+
+- `cardType`
+  - current implementation only accepts `fence`
 
 `match.prepareNextRound` may also include:
 
@@ -129,8 +137,12 @@ This lets the web shell support:
 ## Player-specific projection
 
 - Room snapshots sent to clients are now projected per player.
+- The server uses the same player-specific projection rules for both:
+  - `GET /api/rooms/:roomId?playerId=...`
+  - websocket `room.updated` payloads for started rooms
 - The projection includes:
   - the current turn stage for the active player
+  - player special-card inventory charge counts for the current inventory overlay
   - authoritative turn affordances for the viewer
     - mandatory-move highlight targets
     - secondary-move highlight targets
@@ -138,8 +150,36 @@ This lets the web shell support:
     - per-special-card availability flags
   - the current revealed auction card
   - resolved auction winners by offer slot
-  - the viewer's own treasure cards with point values
-  - treasure values for opened or viewer-owned treasures only
+  - the public treasure-board slot strip
+    - slot occupancy
+    - whether a slot has already been opened
+  - the viewer's current treasure-placement hand during `treasurePlacement`
+    - real-card slot number
+    - real-card score
+    - fake-card marker
+  - the viewer's own opened-treasure details after opening
+- Public `state.players` entries now expose only:
+  - `id`
+  - `name`
+  - `seat`
+  - `position`
+  - `score`
+  - `hitPoints`
+  - `eliminated`
+  - `carryingTreasure`
+- Viewer-private state now lives under `viewer.self`:
+  - `carriedTreasureId`
+  - `openedTreasureIds`
+  - `availablePriorityCards`
+  - `specialInventory`
+  - status flags
+- The public room snapshot does not include:
+  - treasure slot numbers on map tokens
+  - treasure-card owner ids
+  - treasure-card scores for placed but unopened cards
+  - internal treasure ids that encode slot numbers
+  - fake-card details for other players
+  - another player's priority-hand, inventory charges, or carried-treasure id
 - Unrevealed auction offers and other players' hidden treasure values stay off the wire to the GUI shell.
 
 - Rotation legality is currently not range-limited by player position in the projection layer or rule engine.
