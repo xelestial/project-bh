@@ -14,6 +14,12 @@ import {
   resolveHttpUrl,
   resolveWebSocketUrl
 } from "./runtime-transport.ts";
+import {
+  getPlayerIconSrc,
+  getSpecialCardIconSrc,
+  getTileIconSrc,
+  getTreasureIconSrc
+} from "./ui-assets.ts";
 
 type RoomStatus = "lobby" | "started";
 type TurnStage = "mandatoryStep" | "secondaryAction";
@@ -585,20 +591,28 @@ function BoardView(props: {
             key={key}
             className={`cell tile-${tile || "plain"} ${inZone ? "in-zone" : ""} ${zoneEdge} ${highlightClass}`}
             data-cell={key}
+            aria-label={`${key}${tile ? ` ${tile}` : ""}${players.length > 0 ? ` ${players.map((player) => player.name).join(", ")}` : ""}${treasures.length > 0 ? ` ${treasures.length} treasure(s)` : ""}`}
+            title={`${key}${tile ? ` · ${tile}` : ""}`}
             onContextMenu={(event) => props.onCellContextMenu(event, { x, y })}
           >
-            <span className="coord">
-              {x},{y}
-            </span>
             {isHighlighted ? (
               <span className={`hint-badge ${props.highlightTone === "mandatoryStep" ? "hint-step" : "hint-action"}`}>
                 {props.highlightTone === "mandatoryStep" ? "1" : "+2"}
               </span>
             ) : null}
-            {tile ? <span className="badge tile-badge">{tile.slice(0, 2).toUpperCase()}</span> : null}
+            {tile ? (
+              <span className="badge asset-badge tile-badge" aria-hidden="true">
+                {getTileIconSrc(tile) ? <img className="asset-icon tile-icon" src={getTileIconSrc(tile) ?? ""} alt="" draggable="false" /> : null}
+              </span>
+            ) : null}
             {treasures.map((treasure) => (
-              <span key={treasure.id} className="badge treasure-badge">
-                {treasure.openedByPlayerId ? "OP" : "BX"}
+              <span key={treasure.id} className="badge asset-badge treasure-badge" aria-hidden="true">
+                <img
+                  className="asset-icon treasure-icon"
+                  src={getTreasureIconSrc(Boolean(treasure.openedByPlayerId))}
+                  alt=""
+                  draggable="false"
+                />
               </span>
             ))}
             <span className="player-stack">
@@ -606,9 +620,15 @@ function BoardView(props: {
                 <span
                   key={player.id}
                   className={`player-marker ${player.id === props.playerId ? "is-self" : ""}`}
+                  data-seat={player.seat}
                   title={player.name}
                 >
-                  {player.name.slice(0, 2).toUpperCase()}
+                  <img
+                    className="asset-icon player-icon"
+                    src={player.id === props.playerId ? "/icons/player-seat-self.svg" : getPlayerIconSrc(player.seat)}
+                    alt=""
+                    draggable="false"
+                  />
                 </span>
               ))}
             </span>
@@ -1443,6 +1463,12 @@ export function App() {
                       );
                     }}
                   >
+                    <img
+                      className="special-card-icon"
+                      src={getSpecialCardIconSrc(card)}
+                      alt=""
+                      draggable="false"
+                    />
                     <strong>{formatSpecialCardLabel(card)}</strong>
                     <span>
                       {chargeCount}회 남음

@@ -1,7 +1,6 @@
 import type {
   AuctionSpecialCardType,
   MatchSettings,
-  TileDefinition
 } from "../packages/domain/src/index.ts";
 
 export interface TreasureCardConfig {
@@ -12,7 +11,7 @@ export interface TreasureCardConfig {
 export interface TestplayConfig {
   readonly settings: Partial<MatchSettings>;
   readonly board: {
-    readonly tiles: readonly TileDefinition[];
+    readonly tileCounts: Readonly<Record<"fire" | "water" | "electric", number>>;
     readonly specialCardDeck: readonly AuctionSpecialCardType[];
   };
   readonly treasureCardsPerPlayer: number;
@@ -33,15 +32,11 @@ export const PROJECT_BH_TESTPLAY_CONFIG: TestplayConfig = {
     }
   },
   board: {
-    tiles: [
-      { position: { x: 6, y: 6 }, kind: "fire" },
-      { position: { x: 7, y: 6 }, kind: "water" },
-      { position: { x: 8, y: 6 }, kind: "electric" },
-      { position: { x: 10, y: 10 }, kind: "fire" },
-      { position: { x: 10, y: 11 }, kind: "fire" },
-      { position: { x: 11, y: 10 }, kind: "water" },
-      { position: { x: 11, y: 11 }, kind: "electric" }
-    ],
+    tileCounts: {
+      fire: 10,
+      water: 10,
+      electric: 10
+    },
     specialCardDeck: [
       "coldBomb",
       "flameBomb",

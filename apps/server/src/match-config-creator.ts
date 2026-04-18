@@ -2,8 +2,10 @@ import { PROJECT_BH_TESTPLAY_CONFIG } from "../../../config/testplay-config.ts";
 import type {
   CreateMatchStateInput,
   PlayerDefinition,
-  TreasureDefinition
+  TreasureDefinition,
+  TileDefinition
 } from "../../../packages/domain/src/index.ts";
+import { BOARD_SIZE, createPosition, positionKey } from "../../../packages/domain/src/index.ts";
 
 interface RoomPlayerLike {
   readonly id: string;
@@ -52,10 +54,46 @@ function shuffleDeck<TValue>(items: readonly TValue[], seedSource: string): TVal
   return shuffled;
 }
 
+function createBoardTiles(matchId: string): readonly TileDefinition[] {
+  const tileCounts = PROJECT_BH_TESTPLAY_CONFIG.board.tileCounts;
+  const totalTileCount = tileCounts.fire + tileCounts.water + tileCounts.electric;
+  const allPositions: TileDefinition["position"][] = [];
+
+  for (let y = 0; y < BOARD_SIZE; y += 1) {
+    for (let x = 0; x < BOARD_SIZE; x += 1) {
+      allPositions.push(createPosition(x, y));
+    }
+  }
+
+  if (totalTileCount > allPositions.length) {
+    throw new Error(
+      `Requested ${totalTileCount} tiles but the board only has ${allPositions.length} cells.`
+    );
+  }
+
+  const chosenPositions = shuffleDeck(allPositions, `board:${matchId}`).slice(0, totalTileCount);
+  const tileKinds: Array<TileDefinition["kind"]> = [
+    ...Array.from({ length: tileCounts.fire }, () => "fire" as const),
+    ...Array.from({ length: tileCounts.water }, () => "water" as const),
+    ...Array.from({ length: tileCounts.electric }, () => "electric" as const)
+  ];
+  const shuffledKinds = shuffleDeck(tileKinds, `board-kinds:${matchId}`);
+
+  return chosenPositions
+    .map((position, index) => ({
+      position,
+      kind: shuffledKinds[index] ?? "fire"
+    }))
+    .sort((left, right) => positionKey(left.position).localeCompare(positionKey(right.position)));
+}
+
 function createTreasureDefinitions(
   matchId: string,
   players: readonly PlayerDefinition[]
-): readonly TreasureDefinition[] {
+): {
+  readonly treasures: readonly TreasureDefinition[];
+  readonly openableTreasureCount: number;
+} {
   const cardsPerPlayer = PROJECT_BH_TESTPLAY_CONFIG.treasureCardsPerPlayer;
   const requiredCardCount = players.length * cardsPerPlayer;
 
@@ -66,8 +104,9 @@ function createTreasureDefinitions(
   }
 
   const dealtCards = shuffleDeck(PROJECT_BH_TESTPLAY_CONFIG.treasureCardDeck, matchId).slice(0, requiredCardCount);
+  const openableTreasureCount = dealtCards.filter((card) => card.slot !== null).length;
 
-  return players.flatMap((player, seat) => {
+  const treasures = players.flatMap((player, seat) => {
     const startIndex = seat * cardsPerPlayer;
     const hand = dealtCards.slice(startIndex, startIndex + cardsPerPlayer);
 
@@ -85,6 +124,11 @@ function createTreasureDefinitions(
         points: card?.points ?? 0
       }));
   });
+
+  return {
+    treasures,
+    openableTreasureCount
+  };
 }
 
 export function createMatchInputFromConfig(
@@ -96,16 +140,21 @@ export function createMatchInputFromConfig(
     name: player.name
   }));
 
+  const treasureDefinitions = createTreasureDefinitions(matchId, players);
+
   return {
     matchId,
     players,
-    settings: PROJECT_BH_TESTPLAY_CONFIG.settings,
+    settings: {
+      ...PROJECT_BH_TESTPLAY_CONFIG.settings,
+      roundOpenTreasureTarget: treasureDefinitions.openableTreasureCount
+    },
     specialCardDeck: PROJECT_BH_TESTPLAY_CONFIG.board.specialCardDeck,
-    tiles: PROJECT_BH_TESTPLAY_CONFIG.board.tiles,
+    tiles: createBoardTiles(matchId),
     treasureBoardSlots: PROJECT_BH_TESTPLAY_CONFIG.treasureCardDeck
       .map((card) => card.slot)
       .filter((slot): slot is number => slot !== null)
       .sort((left, right) => left - right),
-    treasures: createTreasureDefinitions(matchId, players)
+    treasures: treasureDefinitions.treasures
   };
 }

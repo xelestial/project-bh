@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createMatchInputFromConfig } from "./match-config-creator.ts";
+import { positionKey } from "../../../packages/domain/src/index.ts";
 
 test("match config creator deals treasure cards deterministically and preserves the public treasure board slots", () => {
   const players = [
@@ -19,6 +20,20 @@ test("match config creator deals treasure cards deterministically and preserves 
   assert.equal(first.treasures?.length, 8);
   assert.equal(first.treasures?.filter((treasure) => treasure.slot === null).length, 1);
   assert.equal(new Set(first.treasures?.map((treasure) => treasure.id)).size, 8);
+  assert.equal(first.tiles?.length, 30);
+  assert.deepEqual(first.tiles, second.tiles);
+
+  const tileCounts = (first.tiles ?? []).reduce<Record<string, number>>((counts, tile) => {
+    return {
+      ...counts,
+      [tile.kind]: (counts[tile.kind] ?? 0) + 1
+    };
+  }, {});
+
+  assert.equal(tileCounts.fire, 10);
+  assert.equal(tileCounts.water, 10);
+  assert.equal(tileCounts.electric, 10);
+  assert.equal(new Set(first.tiles?.map((tile) => positionKey(tile.position))).size, 30);
 });
 
 test("match config creator deals two treasure cards per player", () => {

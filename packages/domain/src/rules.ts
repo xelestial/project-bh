@@ -506,6 +506,12 @@ function createStatusChangedEvent(player: PlayerState): DomainEvent {
   };
 }
 
+function isBombTargetInRange(from: Position, to: Position): boolean {
+  const distance = cardinalLineDistance(from, to);
+
+  return distance !== null && distance >= 1 && distance <= 3;
+}
+
 function chooseTreasureDropPosition(player: PlayerState): Position {
   return DROP_DIRECTION_PRIORITY.map((direction) => movePosition(player.position, direction))
     .filter(isWithinBoard)
@@ -1921,6 +1927,14 @@ export function useSpecialCard(
   if (input.cardType === "coldBomb") {
     if (input.targetPlayerId) {
       const target = getPlayerOrThrow(nextMatch, input.targetPlayerId);
+
+      if (!isBombTargetInRange(player.position, target.position)) {
+        throw new DomainError(
+          "INVALID_SPECIAL_CARD_TARGET",
+          "Cold bombs require a target within 3 tiles in a straight line."
+        );
+      }
+
       const updatedTarget: PlayerState = {
         ...target,
         status: {
@@ -1931,6 +1945,13 @@ export function useSpecialCard(
       nextMatch = updatePlayer(nextMatch, updatedTarget);
       events.push(createStatusChangedEvent(updatedTarget));
     } else if (input.targetPosition) {
+      if (!isBombTargetInRange(player.position, input.targetPosition)) {
+        throw new DomainError(
+          "INVALID_SPECIAL_CARD_TARGET",
+          "Cold bombs require a target within 3 tiles in a straight line."
+        );
+      }
+
       if (getTileKind(nextMatch.board, input.targetPosition) !== "water") {
         throw new DomainError(
           "INVALID_SPECIAL_CARD_TARGET",
@@ -1971,6 +1992,13 @@ export function useSpecialCard(
       throw new DomainError(
         "INVALID_SPECIAL_CARD_TARGET",
         "Bomb cards require a target position."
+      );
+    }
+
+    if (!isBombTargetInRange(player.position, input.targetPosition)) {
+      throw new DomainError(
+        "INVALID_SPECIAL_CARD_TARGET",
+        "Bomb cards require a target within 3 tiles in a straight line."
       );
     }
 

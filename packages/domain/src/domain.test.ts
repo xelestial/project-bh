@@ -346,7 +346,7 @@ test("fence cards can be bought directly during the auction for one point", () =
 
 test("special card bombs can modify the board and remove fences", () => {
   const match = createTwoPlayerMatchFixture({
-    tiles: [{ position: createPosition(2, 2), kind: "water" }],
+    tiles: [{ position: createPosition(0, 2), kind: "water" }],
     treasures: [],
     auctionBids: [[{ offerSlot: 0, amount: 1 }], []]
   });
@@ -368,7 +368,7 @@ test("special card bombs can modify the board and remove fences", () => {
       fences: {
         "fence-a": {
           id: "fence-a",
-          positions: [createPosition(2, 2), createPosition(2, 3)]
+          positions: [createPosition(0, 2), createPosition(0, 3)]
         }
       }
     }
@@ -377,12 +377,45 @@ test("special card bombs can modify the board and remove fences", () => {
   const result = useSpecialCard(stepped, {
     playerId: "player-1",
     cardType: "flameBomb",
-    targetPosition: createPosition(2, 2)
+    targetPosition: createPosition(0, 2)
   });
 
-  assert.equal(result.state.board.tiles["2,2"]?.kind, "fire");
+  assert.equal(result.state.board.tiles["0,2"]?.kind, "fire");
   assert.equal(result.state.board.fences["fence-a"], undefined);
   assert.equal(result.state.round.activePlayerId, "player-2");
+});
+
+test("cold bombs only target players or tiles within three straight-line tiles", () => {
+  const match = createTwoPlayerMatchFixture({
+    treasures: []
+  });
+  const stepped = moveActivePlayer(match, "player-1", "south").state;
+  const prepared = replacePlayer(
+    replacePlayer(stepped, "player-1", (player) => ({
+      ...player,
+      specialInventory: {
+        ...player.specialInventory,
+        coldBomb: 1
+      }
+    })),
+    "player-2",
+    (player) => ({
+      ...player,
+      position: createPosition(4, 1)
+    })
+  );
+
+  assert.throws(
+    () =>
+      useSpecialCard(prepared, {
+        playerId: "player-1",
+        cardType: "coldBomb",
+        targetPlayerId: "player-2"
+      }),
+    {
+      code: "INVALID_SPECIAL_CARD_TARGET"
+    }
+  );
 });
 
 test("recovery potion clears status effects and restores full hp", () => {

@@ -80,12 +80,15 @@ The current codebase implements the following rule-backed behavior.
 - Unopened treasures inside a rotated area rotate with the board object layout.
 - Current special-card support includes:
   - `coldBomb`
+    - targets are limited to a straight line within 3 tiles of the acting player
     - can set a player's round movement limit to `1`, which removes the extra movement option from the secondary slot
     - can convert a water tile into ice
   - `flameBomb`
+    - targets are limited to a straight line within 3 tiles of the acting player
     - can create fire on any target tile
     - removes a fence on the target tile before applying fire
   - `electricBomb`
+    - targets are limited to a straight line within 3 tiles of the acting player
     - can create electric on any target tile
     - removes a fence on the target tile before applying electric
   - `largeHammer`
