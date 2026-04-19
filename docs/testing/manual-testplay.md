@@ -7,6 +7,9 @@ Run a local human-vs-human playtest with one authoritative server and two browse
 This guide is for validating that:
 
 - two human players can share one room
+- a second player can join directly from the open-party browser
+- public rooms appear in the open-party browser with the chosen party name
+- private rooms stay invite-only and do not appear in the open-party browser
 - the host can start a match
 - both clients reconcile against the same authoritative state
 - the current rule slices can be exercised by hand
@@ -100,16 +103,18 @@ pnpm dev:web -- --backend-http-url https://game.example.com --backend-ws-url wss
 ## Two-player room flow
 
 1. Open `http://127.0.0.1:5173/` in browser window A.
-2. Enter host name, choose player count `2`, and create a party.
+2. Enter host name, party name, choose player count `2`, pick `Public lobby` or `Private invite only`, and create a party.
 3. Copy the generated invite link or invite code shown in the waiting-room panel.
 4. Open `http://127.0.0.1:5173/` in browser window B or a second browser profile.
-5. Open the invite link directly, or paste the invite code into the join panel.
+5. Either click the room in `Open Parties` if it is public, open the invite link directly, or paste the invite code into the join panel.
 6. Enter the second player name and join the party.
 7. In window A, press `Start Match`.
 
 Expected result:
 
 - neither player has to manually memorize the raw room id
+- a public room appears in `Open Parties` under the chosen party name
+- a private room never appears in `Open Parties`
 - both clients move from waiting-room state to the live match screen
 - both clients show the same round phase and board state
 - later commands update both windows through WebSocket broadcasts
@@ -137,6 +142,16 @@ Use this short path for every fresh manual run:
 11. When a round completes, press `다음 라운드`.
 
 The automated smoke test covers steps 1 through 7 for the current shell.
+
+## Open-party browser checks
+
+1. Create two public rooms with different party names.
+2. Confirm both appear in `Open Parties`.
+3. Toggle the `Recent` and `Players` sort controls.
+4. Confirm `Players` sort puts the fuller room first.
+5. Turn off `빈자리만` and confirm full public lobby rooms appear but cannot be joined from the browser card.
+6. Create one private room.
+7. Confirm the private room is joinable by invite code but does not appear in `Open Parties`.
 
 ## Current manually testable commands
 

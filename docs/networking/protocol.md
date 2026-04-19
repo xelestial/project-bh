@@ -124,8 +124,18 @@ The local multiplayer shell now supports party-style invite entry instead of req
 - Room creation returns:
   - `roomId`
   - `inviteCode`
+  - `roomName`
+  - `visibility`
   - `playerId`
   - `sessionToken`
+- Open party browser endpoint:
+  - `GET /api/rooms`
+    - returns joinable public lobby rooms only
+    - current implementation excludes private, full, and already started rooms
+    - supports `sort=recent|players`
+    - supports `hasSeat=true|false`
+      - `true` keeps only parties with free seats
+      - `false` includes full public lobby rooms as disabled list entries
 - Invite endpoints:
   - `GET /api/invite/:inviteCode`
     - returns room preview metadata for the waiting room
@@ -156,6 +166,8 @@ This lets the web shell support:
 
 - shareable invite links
 - short invite-code entry
+- open-party browsing and one-click join for public waiting rooms
+- private invite-only rooms that stay off the public browser
 - recent-room recall on the client
 - waiting-room UX that is centered on party formation instead of raw identifiers
 

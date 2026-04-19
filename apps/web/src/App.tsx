@@ -22,6 +22,7 @@ import {
 } from "./ui-assets.ts";
 
 type RoomStatus = "lobby" | "started";
+type RoomVisibility = "public" | "private";
 type TurnStage = "mandatoryStep" | "secondaryAction";
 
 interface RoomPlayer {
@@ -32,6 +33,8 @@ interface RoomPlayer {
 interface RoomState {
   roomId: string;
   inviteCode: string;
+  roomName: string;
+  visibility: RoomVisibility;
   hostPlayerId: string;
   desiredPlayerCount: number;
   players: RoomPlayer[];
@@ -191,10 +194,55 @@ interface InvitePreviewResponse {
 interface RecentRoomEntry {
   inviteCode: string;
   roomId: string;
+  roomName: string;
+  visibility: RoomVisibility;
   playerCount: number;
   desiredPlayerCount: number;
   status: RoomStatus;
   lastSeenAt: string;
+}
+
+interface PublicRoomEntry {
+  roomId: string;
+  inviteCode: string;
+  roomName: string;
+  hostPlayerName: string;
+  playerCount: number;
+  desiredPlayerCount: number;
+  hasSeat: boolean;
+  createdAt: string;
+}
+
+type OpenRoomsSort = "recent" | "players";
+
+function formatRelativeMinutes(createdAt: string): string {
+  const created = Date.parse(createdAt);
+
+  if (Number.isNaN(created)) {
+    return "just now";
+  }
+
+  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - created) / 60_000));
+
+  if (elapsedMinutes < 1) {
+    return "just now";
+  }
+
+  if (elapsedMinutes < 60) {
+    return `${elapsedMinutes}m ago`;
+  }
+
+  const hours = Math.floor(elapsedMinutes / 60);
+
+  if (hours < 24) {
+    return `${hours}h ago`;
+  }
+
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+function formatOpenRoomStatus(room: Pick<PublicRoomEntry, "hasSeat">): string {
+  return room.hasSeat ? "대기중" : "만석";
 }
 
 const PLAYER_NAME_STORAGE_KEY = "project-bh.player-name";
@@ -233,6 +281,10 @@ function readRecentRooms(): RecentRoomEntry[] {
         typeof entry.inviteCode === "string" &&
         "roomId" in entry &&
         typeof entry.roomId === "string" &&
+        "roomName" in entry &&
+        typeof entry.roomName === "string" &&
+        "visibility" in entry &&
+        (entry.visibility === "public" || entry.visibility === "private") &&
         "playerCount" in entry &&
         typeof entry.playerCount === "number" &&
         "desiredPlayerCount" in entry &&
@@ -297,6 +349,8 @@ function upsertRecentRoom(room: RoomState): RecentRoomEntry[] {
   const nextEntry: RecentRoomEntry = {
     inviteCode: room.inviteCode,
     roomId: room.roomId,
+    roomName: room.roomName,
+    visibility: room.visibility,
     playerCount: room.players.length,
     desiredPlayerCount: room.desiredPlayerCount,
     status: room.status,
@@ -522,12 +576,87 @@ function RecentRoomsPanel(props: {
             className="recent-room-card"
             onClick={() => props.onUseInviteCode(room.inviteCode)}
           >
-            <strong>{room.inviteCode}</strong>
+            <strong>{room.roomName}</strong>
             <span>{room.playerCount}/{room.desiredPlayerCount} players</span>
+            <span>{room.visibility === "public" ? `Invite ${room.inviteCode}` : "Private invite only"}</span>
             <span>{room.status === "lobby" ? "waiting room" : "started match"}</span>
           </button>
         ))}
       </div>
+    </section>
+  );
+}
+
+function OpenRoomsPanel(props: {
+  rooms: readonly PublicRoomEntry[];
+  sort: OpenRoomsSort;
+  hasSeatOnly: boolean;
+  canJoin: boolean;
+  onChangeSort: (sort: OpenRoomsSort) => void;
+  onToggleHasSeatOnly: () => void;
+  onRefresh: () => void;
+  onJoin: (roomId: string) => void;
+}) {
+  return (
+    <section className="panel open-rooms-panel">
+      <div className="panel-heading-row">
+        <h2>Open Parties</h2>
+        <div className="panel-heading-actions">
+          <div className="segmented-control" role="tablist" aria-label="Open party sort">
+            <button
+              type="button"
+              className={`secondary-button segmented-button ${props.sort === "recent" ? "is-active" : ""}`}
+              onClick={() => props.onChangeSort("recent")}
+            >
+              Recent
+            </button>
+            <button
+              type="button"
+              className={`secondary-button segmented-button ${props.sort === "players" ? "is-active" : ""}`}
+              onClick={() => props.onChangeSort("players")}
+            >
+              Players
+            </button>
+          </div>
+          <button
+            type="button"
+            className={`secondary-button toggle-button ${props.hasSeatOnly ? "is-active" : ""}`}
+            onClick={props.onToggleHasSeatOnly}
+          >
+            빈자리만
+          </button>
+          <button type="button" className="secondary-button" onClick={props.onRefresh}>
+            Refresh
+          </button>
+        </div>
+      </div>
+      {props.rooms.length === 0 ? (
+        <p className="panel-note">지금은 바로 참가 가능한 공개 방이 없습니다. 새 파티를 만들거나 초대 코드로 합류하세요.</p>
+      ) : (
+        <div className="open-room-list">
+          {props.rooms.map((room) => (
+            <article key={room.roomId} className={`open-room-card ${room.hasSeat ? "" : "is-full"}`}>
+              <div className="open-room-copy">
+                <div className="open-room-meta-row">
+                  <strong>{room.roomName}</strong>
+                  <span className="open-room-age">{formatRelativeMinutes(room.createdAt)}</span>
+                </div>
+                <span>Host {room.hostPlayerName}</span>
+                <span>{room.playerCount}/{room.desiredPlayerCount} players</span>
+                <span>{formatOpenRoomStatus(room)}</span>
+              </div>
+              <button
+                type="button"
+                disabled={!props.canJoin || !room.hasSeat}
+                onClick={() => props.onJoin(room.roomId)}
+              >
+                Join
+              </button>
+            </article>
+          ))}
+        </div>
+      )}
+      {!props.canJoin ? <p className="panel-note">먼저 표시 이름을 입력하면 열린 방에 바로 참가할 수 있습니다.</p> : null}
     </section>
   );
 }
@@ -1039,8 +1168,13 @@ export function App() {
   const transportConfig = useMemo(() => createBrowserTransportConfig(window.location), []);
   const [name, setName] = useState("");
   const [playerCount, setPlayerCount] = useState("4");
+  const [roomName, setRoomName] = useState("");
+  const [roomVisibility, setRoomVisibility] = useState<RoomVisibility>("public");
   const [inviteCode, setInviteCode] = useState("");
   const [invitePreview, setInvitePreview] = useState<RoomState | null>(null);
+  const [openRooms, setOpenRooms] = useState<PublicRoomEntry[]>([]);
+  const [openRoomsSort, setOpenRoomsSort] = useState<OpenRoomsSort>("recent");
+  const [openRoomsHasSeatOnly, setOpenRoomsHasSeatOnly] = useState(true);
   const [recentRooms, setRecentRooms] = useState<RecentRoomEntry[]>([]);
   const [room, setRoom] = useState<RoomState | null>(null);
   const [playerId, setPlayerId] = useState("");
@@ -1258,6 +1392,14 @@ export function App() {
   }, [inviteCode, room]);
 
   useEffect(() => {
+    if (room) {
+      return;
+    }
+
+    void refreshOpenRooms();
+  }, [room, transportConfig, openRoomsHasSeatOnly, openRoomsSort]);
+
+  useEffect(() => {
     if (!snapshot) {
       return;
     }
@@ -1307,7 +1449,9 @@ export function App() {
           method: "POST",
           body: JSON.stringify({
             name,
-            playerCount: Number.parseInt(playerCount, 10)
+            playerCount: Number.parseInt(playerCount, 10),
+            roomName,
+            visibility: roomVisibility
           })
         }
       );
@@ -1342,6 +1486,20 @@ export function App() {
       setMessage("");
     } catch (error) {
       setInvitePreview(null);
+      setMessage((error as Error).message);
+    }
+  }
+
+  async function refreshOpenRooms() {
+    try {
+      const payload = await requestJson<{ rooms: PublicRoomEntry[] }>(
+        resolveHttpUrl(
+          transportConfig,
+          `/api/rooms?sort=${openRoomsSort}&hasSeat=${openRoomsHasSeatOnly ? "true" : "false"}`
+        )
+      );
+      setOpenRooms(payload.rooms);
+    } catch (error) {
       setMessage((error as Error).message);
     }
   }
@@ -1493,7 +1651,7 @@ export function App() {
           method: "POST",
           body: JSON.stringify({
             version: 1,
-            playerId,
+            sessionToken,
             cell
           })
         }
@@ -1597,6 +1755,35 @@ export function App() {
     await copyInviteLink();
   }
 
+  async function joinOpenRoom(roomId: string) {
+    if (!name.trim()) {
+      setMessage("표시 이름을 먼저 입력하세요.");
+      return;
+    }
+
+    try {
+      const payload = await requestJson<AuthenticatedRoomResponse>(
+        resolveHttpUrl(transportConfig, `/api/rooms/${roomId}/join`),
+        {
+          method: "POST",
+          body: JSON.stringify({ name })
+        }
+      );
+      setRoom(payload.room);
+      setPlayerId(payload.playerId);
+      setSessionToken(payload.sessionToken);
+      setSnapshot(null);
+      setInvitePreview(payload.room);
+      setInviteCode(payload.room.inviteCode);
+      setRecentRooms(upsertRecentRoom(payload.room));
+      writeActiveSession({ roomId: payload.room.roomId, playerId: payload.playerId, sessionToken: payload.sessionToken });
+      setMessage("");
+      setShareMessage("");
+    } catch (error) {
+      setMessage((error as Error).message);
+    }
+  }
+
   if (!room) {
     return (
       <main className="app-shell lobby-shell" data-screen="landing">
@@ -1617,6 +1804,15 @@ export function App() {
               <input data-testid="host-name-input" value={name} onChange={(event) => setName(event.target.value)} />
             </label>
             <label>
+              Party name
+              <input
+                data-testid="room-name-input"
+                value={roomName}
+                placeholder={`${name.trim() || "Host"}'s party`}
+                onChange={(event) => setRoomName(event.target.value)}
+              />
+            </label>
+            <label>
               Party size
               <select value={playerCount} onChange={(event) => setPlayerCount(event.target.value)}>
                 <option value="4">4</option>
@@ -1624,10 +1820,21 @@ export function App() {
                 <option value="2">2</option>
               </select>
             </label>
+            <label>
+              Visibility
+              <select
+                data-testid="room-visibility-input"
+                value={roomVisibility}
+                onChange={(event) => setRoomVisibility(event.target.value as RoomVisibility)}
+              >
+                <option value="public">Public lobby</option>
+                <option value="private">Private invite only</option>
+              </select>
+            </label>
             <button data-testid="create-party-button" disabled={!name.trim()} onClick={() => void createRoom()}>
               Create Party
             </button>
-            <p className="panel-note">방을 만든 뒤에는 초대 링크를 복사해서 보내면 됩니다. 상대는 코드 전체를 외울 필요가 없습니다.</p>
+            <p className="panel-note">공개 방은 Open Parties에 노출되고, 비공개 방은 초대 링크와 코드로만 참가할 수 있습니다.</p>
           </div>
 
           <div className="panel">
@@ -1666,7 +1873,8 @@ export function App() {
             </div>
             {invitePreview ? (
               <div className="invite-preview-card">
-                <strong>{invitePreview.inviteCode}</strong>
+                <strong>{invitePreview.roomName}</strong>
+                <span>{invitePreview.visibility === "public" ? `Invite ${invitePreview.inviteCode}` : "Private invite only"}</span>
                 <span>{invitePreview.players.length}/{invitePreview.desiredPlayerCount} players joined</span>
                 <span>{invitePreview.status === "lobby" ? "Ready to join" : "Match already started"}</span>
               </div>
@@ -1674,6 +1882,17 @@ export function App() {
               <p className="panel-note">초대 링크를 열면 코드가 자동으로 채워집니다. 코드는 입력이 아니라 붙여넣기 기준으로 설계했습니다.</p>
             )}
           </div>
+
+          <OpenRoomsPanel
+            rooms={openRooms}
+            sort={openRoomsSort}
+            hasSeatOnly={openRoomsHasSeatOnly}
+            canJoin={Boolean(name.trim())}
+            onChangeSort={(sort) => setOpenRoomsSort(sort)}
+            onToggleHasSeatOnly={() => setOpenRoomsHasSeatOnly((current) => !current)}
+            onRefresh={() => void refreshOpenRooms()}
+            onJoin={(roomId) => void joinOpenRoom(roomId)}
+          />
 
           <RecentRoomsPanel
             rooms={recentRooms}
@@ -1700,8 +1919,9 @@ export function App() {
         <header className="top-strip">
           <div className="title-row">
             <p className="eyebrow">Project. BH</p>
-            <strong>Party Lobby</strong>
+            <strong>{room.roomName}</strong>
             <span>{room.players.length}/{room.desiredPlayerCount} joined</span>
+            <span>{room.visibility === "public" ? "Public lobby" : "Private invite only"}</span>
             <span>Invite {room.inviteCode}</span>
           </div>
 

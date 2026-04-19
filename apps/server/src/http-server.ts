@@ -16,6 +16,7 @@ import { resolveHttpServerRuntimeConfig } from "./runtime-config.ts";
 import { resolveClientTreasureId } from "./treasure-client-ids.ts";
 
 type RoomStatus = "lobby" | "started";
+type RoomVisibility = "public" | "private";
 const INVITE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const INVITE_CODE_LENGTH = 6;
 
@@ -32,6 +33,8 @@ interface RoomPlayerSession {
 interface RoomState {
   readonly roomId: string;
   readonly inviteCode: string;
+  readonly roomName: string;
+  readonly visibility: RoomVisibility;
   readonly hostPlayerId: string;
   readonly desiredPlayerCount: number;
   readonly players: readonly RoomPlayer[];
@@ -42,8 +45,11 @@ interface RoomState {
 interface MutableRoom {
   roomId: string;
   inviteCode: string;
+  roomName: string;
+  visibility: RoomVisibility;
   hostPlayerId: string;
   desiredPlayerCount: number;
+  createdAt: string;
   players: RoomPlayer[];
   status: RoomStatus;
   sessionId: string | null;
@@ -51,9 +57,22 @@ interface MutableRoom {
   playerSessions: Map<string, RoomPlayerSession>;
 }
 
+interface PublicRoomSummary {
+  readonly roomId: string;
+  readonly inviteCode: string;
+  readonly roomName: string;
+  readonly hostPlayerName: string;
+  readonly playerCount: number;
+  readonly desiredPlayerCount: number;
+  readonly hasSeat: boolean;
+  readonly createdAt: string;
+}
+
 interface CreateRoomRequest {
   readonly name: string;
   readonly playerCount: number;
+  readonly roomName?: string;
+  readonly visibility?: RoomVisibility;
 }
 
 interface JoinRoomRequest {
@@ -155,6 +174,8 @@ function toRoomState(room: MutableRoom): RoomState {
   return {
     roomId: room.roomId,
     inviteCode: room.inviteCode,
+    roomName: room.roomName,
+    visibility: room.visibility,
     hostPlayerId: room.hostPlayerId,
     desiredPlayerCount: room.desiredPlayerCount,
     players: room.players,
@@ -206,6 +227,41 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
   const engine = createServerCompositionRoot();
   const rooms = new Map<string, MutableRoom>();
   const websocketServer = new WebSocketServer({ noServer: true });
+
+  function listJoinableRooms(
+    options: { readonly sort?: "recent" | "players"; readonly hasSeatOnly?: boolean } = {}
+  ): readonly PublicRoomSummary[] {
+    const sort = options.sort ?? "recent";
+    const hasSeatOnly = options.hasSeatOnly ?? true;
+
+    return [...rooms.values()]
+      .filter(
+        (room) =>
+          room.visibility === "public" &&
+          room.status === "lobby" &&
+          (!hasSeatOnly || room.players.length < room.desiredPlayerCount)
+      )
+      .sort((left, right) => {
+        if (sort === "players") {
+          return (
+            right.players.length - left.players.length ||
+            Date.parse(right.createdAt) - Date.parse(left.createdAt)
+          );
+        }
+
+        return Date.parse(right.createdAt) - Date.parse(left.createdAt);
+      })
+      .map((room) => ({
+        roomId: room.roomId,
+        inviteCode: room.inviteCode,
+        roomName: room.roomName,
+        hostPlayerName: room.players.find((player) => player.id === room.hostPlayerId)?.name ?? "Host",
+        playerCount: room.players.length,
+        desiredPlayerCount: room.desiredPlayerCount,
+        hasSeat: room.players.length < room.desiredPlayerCount,
+        createdAt: room.createdAt
+      }));
+  }
 
   function createInviteCode(): string {
     while (true) {
@@ -307,14 +363,23 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
           return;
         }
 
+        if (body.visibility && body.visibility !== "public" && body.visibility !== "private") {
+          writeJson(response, 400, { error: "visibility must be public or private." });
+          return;
+        }
+
         const roomId = randomUUID().slice(0, 8);
         const hostPlayerId = randomUUID().slice(0, 8);
         const hostPlayerSession = createPlayerSession(hostPlayerId);
+        const roomName = body.roomName?.trim() ? body.roomName.trim() : `${body.name.trim()}'s party`;
         const room: MutableRoom = {
           roomId,
           inviteCode: createInviteCode(),
+          roomName,
+          visibility: body.visibility ?? "public",
           hostPlayerId,
           desiredPlayerCount: body.playerCount,
+          createdAt: new Date().toISOString(),
           players: [{ id: hostPlayerId, name: body.name }],
           status: "lobby",
           sessionId: null,
@@ -347,6 +412,15 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
 
         writeJson(response, 200, {
           room: toRoomState(room)
+        });
+        return;
+      }
+
+      if (request.method === "GET" && url.pathname === "/api/rooms") {
+        const sort = url.searchParams.get("sort") === "players" ? "players" : "recent";
+        const hasSeatOnly = url.searchParams.get("hasSeat") !== "false";
+        writeJson(response, 200, {
+          rooms: listJoinableRooms({ sort, hasSeatOnly })
         });
         return;
       }
