@@ -1,5 +1,6 @@
 import { queryTurnAffordances } from "../../../packages/application/src/index.ts";
 import type { MatchSessionSnapshot } from "./index.ts";
+import { projectTreasureIdForClient } from "./treasure-client-ids.ts";
 
 export interface ProjectedMatchSnapshot {
   readonly sessionId: string;
@@ -14,12 +15,18 @@ export interface ProjectedMatchSnapshot {
         readonly width: number;
         readonly height: number;
       };
+      readonly treasurePlacementZone: {
+        readonly origin: { readonly x: number; readonly y: number };
+        readonly width: number;
+        readonly height: number;
+      };
     };
     readonly treasureBoard: {
       readonly slots: readonly {
         readonly slot: number;
         readonly hasCard: boolean;
         readonly opened: boolean;
+        readonly openedByPlayerId: string | null;
       }[];
     };
     readonly players: Readonly<
@@ -54,6 +61,7 @@ export interface ProjectedMatchSnapshot {
       readonly roundNumber: number;
       readonly phase: MatchSessionSnapshot["state"]["round"]["phase"];
       readonly activePlayerId: string | null;
+      readonly turnOrder: readonly string[];
       readonly turn: MatchSessionSnapshot["state"]["round"]["turn"];
       readonly auction: {
         readonly currentOffer: MatchSessionSnapshot["state"]["round"]["auction"]["offers"][number] | null;
@@ -97,8 +105,8 @@ export function projectSnapshotForPlayer(
     snapshot.state.round.auction.offers[snapshot.state.round.auction.currentOfferIndex] ?? null;
   const publicTreasureEntries = Object.values(snapshot.state.treasures)
     .sort((left, right) => left.id.localeCompare(right.id))
-    .map((treasure, index) => {
-      const publicId = `treasure-token-${index + 1}`;
+    .map((treasure) => {
+      const publicId = projectTreasureIdForClient(snapshot, treasure.id);
 
       return [
         publicId,
@@ -120,7 +128,8 @@ export function projectSnapshotForPlayer(
       settings: {
         totalRounds: snapshot.state.settings.totalRounds,
         roundOpenTreasureTarget: snapshot.state.settings.roundOpenTreasureTarget,
-        rotationZone: snapshot.state.settings.rotationZone
+        rotationZone: snapshot.state.settings.rotationZone,
+        treasurePlacementZone: snapshot.state.settings.treasurePlacementZone
       },
       treasureBoard: {
         slots: snapshot.state.treasureBoardSlots.map((slot) => {
@@ -129,7 +138,8 @@ export function projectSnapshotForPlayer(
           return {
             slot,
             hasCard: treasure !== undefined,
-            opened: treasure !== undefined && treasure.openedByPlayerId !== null
+            opened: treasure !== undefined && treasure.openedByPlayerId !== null,
+            openedByPlayerId: treasure?.openedByPlayerId ?? null
           };
         })
       },
@@ -154,6 +164,7 @@ export function projectSnapshotForPlayer(
         roundNumber: snapshot.state.round.roundNumber,
         phase: snapshot.state.round.phase,
         activePlayerId: snapshot.state.round.activePlayerId,
+        turnOrder: snapshot.state.round.turnOrder,
         turn: snapshot.state.round.turn,
         auction: {
           currentOffer,
@@ -168,8 +179,16 @@ export function projectSnapshotForPlayer(
       playerId: viewerPlayerId,
       self: {
         id: snapshot.state.players[viewerPlayerId]!.id,
-        carriedTreasureId: snapshot.state.players[viewerPlayerId]!.carriedTreasureId,
-        openedTreasureIds: snapshot.state.players[viewerPlayerId]!.openedTreasureIds,
+        carriedTreasureId:
+          snapshot.state.players[viewerPlayerId]!.carriedTreasureId === null
+            ? null
+            : projectTreasureIdForClient(
+                snapshot,
+                snapshot.state.players[viewerPlayerId]!.carriedTreasureId
+              ),
+        openedTreasureIds: snapshot.state.players[viewerPlayerId]!.openedTreasureIds.map((treasureId) =>
+          projectTreasureIdForClient(snapshot, treasureId)
+        ),
         availablePriorityCards: snapshot.state.players[viewerPlayerId]!.availablePriorityCards,
         specialInventory: snapshot.state.players[viewerPlayerId]!.specialInventory,
         status: snapshot.state.players[viewerPlayerId]!.status
@@ -180,7 +199,7 @@ export function projectSnapshotForPlayer(
             .filter((treasure) => treasure.ownerPlayerId === viewerPlayerId)
             .filter((treasure) => treasure.slot === null || treasure.position === null)
             .map((treasure) => ({
-              id: treasure.id,
+              id: projectTreasureIdForClient(snapshot, treasure.id),
               slot: treasure.slot,
               points: treasure.points,
               isFake: treasure.slot === null
@@ -192,7 +211,7 @@ export function projectSnapshotForPlayer(
         }
 
         return [{
-          id: treasure.id,
+          id: projectTreasureIdForClient(snapshot, treasure.id),
           slot: treasure.slot,
           points: treasure.points
         }];

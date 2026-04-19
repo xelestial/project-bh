@@ -158,7 +158,7 @@ test("http server supports room lifecycle and websocket lobby broadcast", async 
       "carriedTreasureId" in startedPayload.snapshot.state.players[joinPayload.playerId]!,
       false
     );
-    assert.match(Object.keys(startedPayload.snapshot.state.treasures)[0] ?? "", /^treasure-token-/);
+    assert.match(Object.keys(startedPayload.snapshot.state.treasures)[0] ?? "", /^tt-/);
 
     socket.close();
   } finally {

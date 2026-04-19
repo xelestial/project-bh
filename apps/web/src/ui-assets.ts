@@ -12,7 +12,7 @@ const TILE_ICON_SOURCES: Readonly<Record<string, string | null>> = {
 
 const TREASURE_ICON_SOURCES: Readonly<Record<"closed" | "open", string>> = {
   closed: "/icons/treasure-closed.svg",
-  open: "/icons/treasure-open.svg"
+  open: "/icons/treasure-gem.svg"
 };
 
 const PLAYER_ICON_SOURCES = [
@@ -28,6 +28,7 @@ const SPECIAL_CARD_ICON_SOURCES: Readonly<Record<SpecialCardType, string>> = {
   electricBomb: "/icons/special-electricBomb.svg",
   largeHammer: "/icons/special-largeHammer.svg",
   fence: "/icons/special-fence.svg",
+  largeFence: "/icons/special-largeFence.svg",
   recoveryPotion: "/icons/special-recoveryPotion.svg",
   jump: "/icons/special-jump.svg",
   hook: "/icons/special-hook.svg"

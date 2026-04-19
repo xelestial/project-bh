@@ -112,6 +112,10 @@ export function createMatchState(input: CreateMatchStateInput): MatchState {
     rotationZone: {
       ...DEFAULT_MATCH_SETTINGS.rotationZone,
       ...input.settings?.rotationZone
+    },
+    treasurePlacementZone: {
+      ...DEFAULT_MATCH_SETTINGS.treasurePlacementZone,
+      ...input.settings?.treasurePlacementZone
     }
   };
 

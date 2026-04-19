@@ -8,6 +8,8 @@ The current codebase implements the following rule-backed behavior.
 - Match supports `2-4` players.
 - Player start positions are assigned clockwise to the four corners.
 - Match settings such as starting HP, starting score, total rounds, auction draw count, and the inner rotation zone are loaded from `config/testplay-config.ts`.
+- Match settings now also define a separate treasure-placement zone inside the inner rotation zone.
+- The current testplay board seeds `5` fire, `5` water, and `5` electric tiles randomly inside the inner rotation zone.
 - Each player starts the round with the configured HP and score values.
 - A round starts in `treasurePlacement` when treasure cards are configured and only becomes turn-playable after:
   - each player places their own real treasure tokens
@@ -19,6 +21,7 @@ The current codebase implements the following rule-backed behavior.
 - Auction bids are submitted as sealed integer bids for the currently revealed card only.
 - Winning bids deduct score immediately and add the current offer as charged inventory on the winning player.
 - Fence cards do not appear in the auction offer deck and may instead be purchased for `1` point during each auction reveal before that player submits the current bid.
+- Large fence cards also stay out of the auction offer deck and may instead be purchased for `2` points during each auction reveal before that player submits the current bid.
 - Treasure card dealing is now deterministic per match id and uses a shuffled treasure-card deck at the creator layer.
 - The current testplay treasure deck contains:
   - seven real slot cards for treasure-board slots `1-7`
@@ -26,8 +29,11 @@ The current codebase implements the following rule-backed behavior.
 - Each player is currently dealt `2` treasure cards at round start.
 - Only real slot cards create a matching map token that must be placed during `treasurePlacement`.
 - The fake card stays viewer-private during the treasure-placement phase and does not block phase completion.
+- Treasure placement is currently constrained to the centered `6 x 6` treasure zone inside the configured `10 x 10` inner board zone.
 - Treasure card scores and slot numbers are no longer projected in the public room snapshot.
 - Treasure placement is currently validated inside the configured inner rotation zone.
+- Once placed, closed treasure boxes are intentionally indistinguishable on the public board.
+- Rotations may therefore shuffle closed treasure boxes in a way that causes players to lose track of which box originally matched their own private card.
 - The public snapshot only exposes:
   - whether a treasure token exists on the map
   - whether a treasure-board slot is occupied
@@ -95,6 +101,8 @@ The current codebase implements the following rule-backed behavior.
     - unlocks both `cross5` and `rectangle6` rotation for the action
   - `fence`
     - is stored as charge inventory and places a length-2 fence on two orthogonally adjacent tiles
+  - `largeFence`
+    - is stored as charge inventory and places a length-3 fence on three straight orthogonally adjacent tiles
   - `recoveryPotion`
     - clears temporary status effects and restores HP to the configured round maximum
   - `jump`
@@ -105,6 +113,7 @@ The current codebase implements the following rule-backed behavior.
   - bomb cards: `3` uses
   - `largeHammer`: `3` uses
   - `fence`: `3` uses per purchase
+  - `largeFence`: `3` uses per purchase
   - `recoveryPotion`: `1` use
   - `jump`: `3` uses
   - `hook`: `2` uses
@@ -137,7 +146,7 @@ The following areas remain pending and should stay in the domain/application lay
 - Auction ties are currently interpreted as:
   - highest bid wins
   - equal bids break by lower seat index
-- The current auction model assumes sequential sealed bidding across the drawn offer queue plus direct `1`-point fence purchases before each player's current reveal is submitted.
+- The current auction model assumes sequential sealed bidding across the drawn offer queue plus direct `1`-point fence and `2`-point large-fence purchases before each player's current reveal is submitted.
 - Ice treasure-drop tie cases currently use a deterministic fallback ordering instead of interactive player choice.
 - Round reset currently preserves board tile and fence state unless later rules require a board reset between rounds.
 - The current rotation model assumes the active player may target any legal selection on the board; only selection validity, player occupancy, and fence-boundary constraints can reject it.

@@ -12,6 +12,7 @@ Current coverage includes:
 - local web client adapter view-model flow
 - sequential auction submission and resolution
 - treasure placement phase bootstrap
+- centered `6 x 6` treasure-placement zone inside the inner board area
 - priority submission and deterministic turn order
 - mandatory-step turn enforcement
 - secondary-step extra movement consumption
@@ -30,6 +31,7 @@ Current coverage includes:
 - application-layer rejection mapping
 - protocol payload validation
 - browser smoke coverage for host-create, guest-join, treasure placement, sequential auction reveal, and right-click movement query
+- board bootstrap coverage for five fire, five water, and five electric tiles seeded inside the rotation zone
 - projector coverage for player-private treasure data and opener-only reveal behavior
 - HTTP integration coverage for public/private snapshot separation and unknown-room rejection safety
 
@@ -47,6 +49,7 @@ Current coverage includes:
 - GUI interaction regressions should be captured at two layers:
   - domain/application tests for legality
   - browser-facing smoke tests for treasure placement, sequential auction reveal, and right-click action query
+  - UI checks for card-shaped priority inventory and visible turn-order chips
   - targeted UI tests for move highlights and overlay state when the shell gains a component-test harness
   - snapshot-boundary tests that assert hidden information never leaks through either HTTP refresh or websocket room updates
 

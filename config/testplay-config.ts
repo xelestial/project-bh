@@ -23,19 +23,25 @@ export const PROJECT_BH_TESTPLAY_CONFIG: TestplayConfig = {
     startingHitPoints: 10,
     startingScore: 3,
     totalRounds: 5,
-    roundOpenTreasureTarget: 4,
+    // Standard 4-player test setup: a 10x10 rotation zone containing a centered 6x6 treasure area.
+    roundOpenTreasureTarget: 7,
     auctionCardDrawCount: 4,
     rotationZone: {
       origin: { x: 5, y: 5 },
       width: 10,
       height: 10
+    },
+    treasurePlacementZone: {
+      origin: { x: 7, y: 7 },
+      width: 6,
+      height: 6
     }
   },
   board: {
     tileCounts: {
-      fire: 10,
-      water: 10,
-      electric: 10
+      fire: 5,
+      water: 5,
+      electric: 5
     },
     specialCardDeck: [
       "coldBomb",

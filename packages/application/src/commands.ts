@@ -1,6 +1,7 @@
 import type {
   AuctionBidState,
   Direction,
+  FencePositions,
   MatchState,
   PlayerId,
   Position,
@@ -70,7 +71,7 @@ export interface UseSpecialCardCommand {
   readonly cardType: SpecialCardType;
   readonly targetPosition?: Position;
   readonly targetPlayerId?: PlayerId;
-  readonly fencePositions?: readonly [Position, Position];
+  readonly fencePositions?: FencePositions;
   readonly selection?: RotationSelection;
   readonly direction?: RotationDirection;
 }

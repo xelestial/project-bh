@@ -5,7 +5,6 @@ import {
   moveActivePlayer,
   movePosition,
   openCarriedTreasure,
-  rotateTiles,
   throwTile,
   useSpecialCard,
   type Direction,
@@ -15,6 +14,7 @@ import {
   type SpecialCardType,
   type TurnStage
 } from "../../domain/src/index.ts";
+import { listLegalNormalRotationOrigins } from "./rotation-candidates.ts";
 
 const CARDINAL_DIRECTIONS: readonly Direction[] = ["north", "east", "south", "west"];
 const ROTATION_DIRECTIONS = ["clockwise", "counterclockwise"] as const;
@@ -25,6 +25,7 @@ export interface TurnAffordances {
   readonly stage: TurnStage | null;
   readonly mandatoryMoveTargets: readonly Position[];
   readonly secondaryMoveTargets: readonly Position[];
+  readonly rotationOrigins: readonly Position[];
   readonly availableSecondaryActions: {
     readonly move: boolean;
     readonly throwTile: boolean;
@@ -61,6 +62,7 @@ function createInactiveAffordances(): TurnAffordances {
     stage: null,
     mandatoryMoveTargets: [],
     secondaryMoveTargets: [],
+    rotationOrigins: [],
     availableSecondaryActions: {
       move: false,
       throwTile: false,
@@ -132,29 +134,6 @@ function hasAnyLegalThrow(match: MatchState, playerId: PlayerId): boolean {
         ) {
           return true;
         }
-      }
-    }
-  }
-
-  return false;
-}
-
-function hasAnyLegalNormalRotation(match: MatchState, playerId: PlayerId): boolean {
-  for (const position of listBoardPositions(match)) {
-    for (const direction of ROTATION_DIRECTIONS) {
-      if (
-        tryCommand(() =>
-          rotateTiles(match, {
-            playerId,
-            selection: {
-              kind: "square2",
-              origin: position
-            },
-            direction
-          })
-        )
-      ) {
-        return true;
       }
     }
   }
@@ -283,17 +262,30 @@ function canUseSpecialCardType(
     });
   }
 
-  return listBoardPositions(match).some((firstPosition) =>
-    CARDINAL_DIRECTIONS.some((direction) =>
-      tryCommand(() =>
-        useSpecialCard(match, {
-          playerId,
-          cardType,
-          fencePositions: [firstPosition, movePosition(firstPosition, direction)]
-        })
-      )
-    )
-  );
+  if (cardType === "fence" || cardType === "largeFence") {
+    return listBoardPositions(match).some((firstPosition) =>
+      CARDINAL_DIRECTIONS.some((direction) => {
+        const fencePositions =
+          cardType === "largeFence"
+            ? ([
+                firstPosition,
+                movePosition(firstPosition, direction),
+                movePosition(movePosition(firstPosition, direction), direction)
+              ] as const)
+            : ([firstPosition, movePosition(firstPosition, direction)] as const);
+
+        return tryCommand(() =>
+          useSpecialCard(match, {
+            playerId,
+            cardType,
+            fencePositions
+          })
+        );
+      })
+    );
+  }
+
+  return false;
 }
 
 export function queryTurnAffordances(
@@ -318,6 +310,7 @@ export function queryTurnAffordances(
       stage,
       mandatoryMoveTargets,
       secondaryMoveTargets: [],
+      rotationOrigins: [],
       availableSecondaryActions: {
         move: false,
         throwTile: false,
@@ -337,6 +330,7 @@ export function queryTurnAffordances(
   }
 
   const secondaryMoveTargets = collectLegalMoveTargets(match, playerId);
+  const rotationOrigins = listLegalNormalRotationOrigins(match, playerId);
   const availableSpecialCards = Object.fromEntries(
     SPECIAL_CARD_TYPES.map((cardType) => [
       cardType,
@@ -350,10 +344,11 @@ export function queryTurnAffordances(
     stage,
     mandatoryMoveTargets: [],
     secondaryMoveTargets,
+    rotationOrigins,
     availableSecondaryActions: {
       move: secondaryMoveTargets.length > 0,
       throwTile: hasAnyLegalThrow(match, playerId),
-      rotateTiles: hasAnyLegalNormalRotation(match, playerId),
+      rotateTiles: rotationOrigins.length > 0,
       specialCard: hasSpecialCardAction,
       openTreasure: tryCommand(() => openCarriedTreasure(match, playerId)),
       endTurn: tryCommand(() => endTurn(match, playerId))

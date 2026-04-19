@@ -1,4 +1,5 @@
 import {
+  type FencePositions,
   SPECIAL_CARD_TYPES,
   type Position,
   type RotationDirection,
@@ -59,7 +60,7 @@ export interface ActionCommandPayload {
   readonly cardType?: SpecialCardType;
   readonly targetPosition?: Position;
   readonly targetPlayerId?: string;
-  readonly fencePositions?: readonly [Position, Position];
+  readonly fencePositions?: FencePositions;
 }
 
 export interface ActionCandidate {

@@ -1,4 +1,11 @@
-import type { AuctionBidState, Position, RotationDirection, RotationSelection, SpecialCardType } from "../../../packages/domain/src/index.ts";
+import type {
+  AuctionBidState,
+  FencePositions,
+  Position,
+  RotationDirection,
+  RotationSelection,
+  SpecialCardType
+} from "../../../packages/domain/src/index.ts";
 import { getCommandVersion } from "../../../packages/protocol/src/index.ts";
 import type { MatchSessionSnapshot, ServerCompositionRoot } from "../../server/src/index.ts";
 
@@ -36,7 +43,7 @@ export interface MatchViewModel {
   }[];
   readonly fences: readonly {
     id: string;
-    positions: readonly [{ x: number; y: number }, { x: number; y: number }];
+    positions: FencePositions;
   }[];
 }
 
@@ -192,7 +199,7 @@ export class LocalMatchClientAdapter {
     cardType: SpecialCardType;
     targetPosition?: Position;
     targetPlayerId?: string;
-    fencePositions?: readonly [Position, Position];
+    fencePositions?: FencePositions;
     selection?: RotationSelection;
     direction?: RotationDirection;
   }) {

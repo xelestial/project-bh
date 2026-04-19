@@ -1,5 +1,6 @@
 import type {
   Direction,
+  FencePositions,
   PlayerId,
   Position,
   PriorityCard,
@@ -108,7 +109,7 @@ export type DomainEvent =
   | {
       readonly type: "fencePlaced";
       readonly fenceId: string;
-      readonly positions: readonly [Position, Position];
+      readonly positions: FencePositions;
     }
   | {
       readonly type: "fenceRemoved";

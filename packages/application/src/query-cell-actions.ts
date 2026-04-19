@@ -1,4 +1,6 @@
 import {
+  cardinalDirectionBetween,
+  cardinalLineDistance,
   DomainError,
   getTileKind,
   moveActivePlayer,
@@ -18,6 +20,7 @@ import {
   type ActionCommandPayload,
   type PendingCellAction
 } from "../../protocol/src/action-query-schema.ts";
+import { listLegalNormalRotationDirections } from "./rotation-candidates.ts";
 
 function tryCommand(
   run: () => void
@@ -108,18 +111,25 @@ function createRotationActions(
   };
 
   if (mode === "normal") {
-    addRotation(
-      `rotate-square2-cw-${cell.x}-${cell.y}`,
-      "2x2 시계 회전",
-      { kind: "square2", origin: cell },
-      "clockwise"
-    );
-    addRotation(
-      `rotate-square2-ccw-${cell.x}-${cell.y}`,
-      "2x2 반시계 회전",
-      { kind: "square2", origin: cell },
-      "counterclockwise"
-    );
+    const legalDirections = new Set(listLegalNormalRotationDirections(match, playerId, cell));
+
+    if (legalDirections.has("clockwise")) {
+      addRotation(
+        `rotate-square2-cw-${cell.x}-${cell.y}`,
+        "2x2 시계 회전",
+        { kind: "square2", origin: cell },
+        "clockwise"
+      );
+    }
+
+    if (legalDirections.has("counterclockwise")) {
+      addRotation(
+        `rotate-square2-ccw-${cell.x}-${cell.y}`,
+        "2x2 반시계 회전",
+        { kind: "square2", origin: cell },
+        "counterclockwise"
+      );
+    }
   }
 
   if (mode === "largeHammer") {
@@ -307,22 +317,43 @@ export function queryCellActions(
         actions.push(...createRotationActions(match, playerId, cell, "largeHammer"));
         break;
       case "fence":
+      case "largeFence":
         if (!pendingAction.firstPosition) {
           actions.push(
-            createPendingAction("fence-first", "울타리 첫 칸 선택", {
+            createPendingAction(`${pendingAction.cardType}-first`, `${pendingAction.cardType === "largeFence" ? "대형 울타리" : "울타리"} 첫 칸 선택`, {
               ...pendingAction,
               firstPosition: cell
             })
           );
         } else {
           const firstPosition = pendingAction.firstPosition;
+          const requiredDistance = pendingAction.cardType === "largeFence" ? 2 : 1;
+          const lineDistance = cardinalLineDistance(firstPosition, cell);
+          const direction = cardinalDirectionBetween(firstPosition, cell);
+
+          if (!direction || lineDistance !== requiredDistance) {
+            break;
+          }
+
+          const secondPosition: Position = {
+            x: firstPosition.x + (direction === "east" ? 1 : direction === "west" ? -1 : 0),
+            y: firstPosition.y + (direction === "south" ? 1 : direction === "north" ? -1 : 0)
+          };
+          const fencePositions =
+            pendingAction.cardType === "largeFence"
+              ? ([
+                  firstPosition,
+                  secondPosition,
+                  cell
+                ] as const)
+              : ([firstPosition, cell] as const);
 
           if (
             !tryCommand(() =>
               useSpecialCard(match, {
                 playerId,
-                cardType: "fence",
-                fencePositions: [firstPosition, cell]
+                cardType: pendingAction.cardType,
+                fencePositions
               })
             )
           ) {
@@ -330,14 +361,15 @@ export function queryCellActions(
           }
 
           actions.push(
-            createCommandAction("fence-place", "여기에 울타리 설치", {
+            createCommandAction(
+              `${pendingAction.cardType}-place`,
+              pendingAction.cardType === "largeFence" ? "여기에 대형 울타리 설치" : "여기에 울타리 설치",
+              {
               type: "match.useSpecialCard",
-              cardType: "fence",
-              fencePositions: [firstPosition, cell] as readonly [
-                Position,
-                Position
-              ]
-            })
+              cardType: pendingAction.cardType,
+              fencePositions
+            }
+            )
           );
         }
         break;

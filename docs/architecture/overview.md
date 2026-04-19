@@ -42,6 +42,7 @@ The current baseline now covers:
 - deterministic match creation
 - auction-phase round bootstrap
 - player start positions on a 20x20 board
+- testplay boards seeded with `5` fire, `5` water, and `5` electric tiles inside the rotation zone
 - special-card deck and revealed auction offers
 - priority-card submission and turn-order resolution
 - mandatory-step plus secondary-action turn structure
@@ -60,6 +61,8 @@ The current baseline now covers:
 - explicit public/private snapshot boundaries
   - public state contains only shared board, round, score, and occupancy data
   - viewer state contains private inventory, hand, and opened-treasure details for one player only
+  - player-private turn-order projection is surfaced after priority resolution
+  - treasure placement is constrained to a centered `6 x 6` zone inside the inner `10 x 10` board area
 
 ## Near-term build order
 

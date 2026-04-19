@@ -12,6 +12,7 @@ import type { DomainEvent } from "./events.ts";
 import type {
   AuctionOfferState,
   AuctionBidState,
+  FencePositions,
   FenceState,
   Direction,
   MatchState,
@@ -83,7 +84,7 @@ export interface UseSpecialCardInput {
   readonly cardType: SpecialCardType;
   readonly targetPosition?: Position;
   readonly targetPlayerId?: PlayerId;
-  readonly fencePositions?: readonly [Position, Position];
+  readonly fencePositions?: FencePositions;
   readonly selection?: RotationSelection;
   readonly direction?: RotationDirection;
 }
@@ -332,11 +333,11 @@ function getPlayerOwnedTreasures(
   return Object.values(match.treasures).filter((treasure) => treasure.ownerPlayerId === playerId);
 }
 
-function isTreasureInsideRotationZone(
+function isTreasureInsideTreasurePlacementZone(
   settings: MatchSettings,
   position: Position
 ): boolean {
-  const { origin, width, height } = settings.rotationZone;
+  const { origin, width, height } = settings.treasurePlacementZone;
 
   return (
     position.x >= origin.x &&
@@ -510,6 +511,58 @@ function isBombTargetInRange(from: Position, to: Position): boolean {
   const distance = cardinalLineDistance(from, to);
 
   return distance !== null && distance >= 1 && distance <= 3;
+}
+
+function getDirectPurchaseCost(cardType: SpecialCardType): number | null {
+  switch (cardType) {
+    case "fence":
+      return 1;
+    case "largeFence":
+      return 2;
+    default:
+      return null;
+  }
+}
+
+function validateFencePlacement(
+  positions: FencePositions,
+  expectedLength: 2 | 3
+): positions is FencePositions {
+  if (positions.length !== expectedLength) {
+    return false;
+  }
+
+  if (!positions.every((position) => isWithinBoard(position))) {
+    return false;
+  }
+
+  let direction: Direction | null = null;
+
+  for (let index = 1; index < positions.length; index += 1) {
+    const previous = positions[index - 1];
+    const current = positions[index];
+
+    if (!previous || !current || !areOrthogonallyAdjacent(previous, current)) {
+      return false;
+    }
+
+    const stepDirection = cardinalDirectionBetween(previous, current);
+
+    if (!stepDirection) {
+      return false;
+    }
+
+    if (direction === null) {
+      direction = stepDirection;
+      continue;
+    }
+
+    if (direction !== stepDirection) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function chooseTreasureDropPosition(player: PlayerState): Position {
@@ -831,10 +884,10 @@ export function placeTreasure(
     throw new DomainError("OUT_OF_BOUNDS", "Treasure placement must stay inside the board.");
   }
 
-  if (!isTreasureInsideRotationZone(match.settings, input.position)) {
+  if (!isTreasureInsideTreasurePlacementZone(match.settings, input.position)) {
     throw new DomainError(
       "INVALID_POSITION",
-      "Treasure placement must stay inside the configured rotation zone."
+      "Treasure placement must stay inside the configured treasure zone."
     );
   }
 
@@ -1795,10 +1848,12 @@ export function purchaseSpecialCard(
 ): DomainMutationResult {
   assertAuctionPhase(match);
 
-  if (cardType !== "fence") {
+  const purchaseCost = getDirectPurchaseCost(cardType);
+
+  if (purchaseCost === null) {
     throw new DomainError(
       "INVALID_SPECIAL_CARD_TARGET",
-      "Only fence cards may be purchased directly during the auction phase."
+      "Only fence and large fence cards may be purchased directly during the auction phase."
     );
   }
 
@@ -1811,21 +1866,21 @@ export function purchaseSpecialCard(
   if (match.round.auction.submittedBids[playerId] !== null) {
     throw new DomainError(
       "AUCTION_BID_ALREADY_SUBMITTED",
-      "Fence cards must be purchased before the current auction bid is submitted."
+      "Direct-purchase fence cards must be purchased before the current auction bid is submitted."
     );
   }
 
-  if (player.score < 1) {
+  if (player.score < purchaseCost) {
     throw new DomainError(
       "INVALID_AUCTION_BID",
-      "A player needs at least 1 score to buy a fence card."
+      `A player needs at least ${purchaseCost} score to buy this card.`
     );
   }
 
   const updatedPlayer = addSpecialCardToPlayer(
     {
       ...player,
-      score: player.score - 1
+      score: player.score - purchaseCost
     },
     cardType
   );
@@ -1837,7 +1892,7 @@ export function purchaseSpecialCard(
         type: "specialCardPurchased",
         playerId,
         cardType,
-        cost: 1
+        cost: purchaseCost
       }
     ]
   };
@@ -1889,22 +1944,23 @@ export function useSpecialCard(
     };
   }
 
-  if (input.cardType === "fence") {
+  if (input.cardType === "fence" || input.cardType === "largeFence") {
     const fencePositions = input.fencePositions;
+    const expectedLength = input.cardType === "largeFence" ? 3 : 2;
 
     if (
       !fencePositions ||
-      !isWithinBoard(fencePositions[0]) ||
-      !isWithinBoard(fencePositions[1]) ||
-      !areOrthogonallyAdjacent(fencePositions[0], fencePositions[1])
+      !validateFencePlacement(fencePositions, expectedLength)
     ) {
       throw new DomainError(
         "INVALID_SPECIAL_CARD_TARGET",
-        "Fence cards require two orthogonally adjacent in-bounds positions."
+        expectedLength === 3
+          ? "Large fence cards require three straight orthogonally adjacent in-bounds positions."
+          : "Fence cards require two orthogonally adjacent in-bounds positions."
       );
     }
 
-    const fenceId = `fence-${nextMatch.round.roundNumber}-${nextMatch.round.turnNumber}-${input.playerId}`;
+    const fenceId = `${input.cardType}-${nextMatch.round.roundNumber}-${nextMatch.round.turnNumber}-${input.playerId}`;
     nextMatch = updateBoard(
       nextMatch,
       upsertFence(nextMatch.board, {

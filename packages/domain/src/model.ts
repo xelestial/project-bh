@@ -9,6 +9,7 @@ export const SPECIAL_CARD_TYPES = [
   "electricBomb",
   "largeHammer",
   "fence",
+  "largeFence",
   "recoveryPotion",
   "jump",
   "hook"
@@ -43,6 +44,7 @@ export const SPECIAL_CARD_CHARGE_BUNDLE = {
   electricBomb: 3,
   largeHammer: 3,
   fence: 3,
+  largeFence: 3,
   recoveryPotion: 1,
   jump: 3,
   hook: 2
@@ -64,6 +66,7 @@ export interface MatchSettings {
   readonly roundOpenTreasureTarget: number;
   readonly auctionCardDrawCount: number;
   readonly rotationZone: RotationZone;
+  readonly treasurePlacementZone: RotationZone;
 }
 
 export const DEFAULT_MATCH_SETTINGS: MatchSettings = {
@@ -76,6 +79,11 @@ export const DEFAULT_MATCH_SETTINGS: MatchSettings = {
     origin: { x: 5, y: 5 },
     width: 10,
     height: 10
+  },
+  treasurePlacementZone: {
+    origin: { x: 7, y: 7 },
+    width: 6,
+    height: 6
   }
 };
 
@@ -131,14 +139,18 @@ export interface TileDefinition {
   readonly kind: Exclude<TileKind, "plain">;
 }
 
+export type FencePositions =
+  | readonly [Position, Position]
+  | readonly [Position, Position, Position];
+
 export interface FenceDefinition {
   readonly id: string;
-  readonly positions: readonly [Position, Position];
+  readonly positions: FencePositions;
 }
 
 export interface FenceState {
   readonly id: string;
-  readonly positions: readonly [Position, Position];
+  readonly positions: FencePositions;
 }
 
 export interface BoardState {

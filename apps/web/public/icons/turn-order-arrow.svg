@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 64" fill="none">
+  <defs>
+    <linearGradient id="shaft" x1="8" y1="10" x2="152" y2="54" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#103F36"/>
+      <stop offset="1" stop-color="#4ED6B3"/>
+    </linearGradient>
+  </defs>
+  <rect x="10" y="22" width="104" height="20" rx="10" fill="url(#shaft)" opacity="0.18"/>
+  <path d="M18 32h88" stroke="url(#shaft)" stroke-width="10" stroke-linecap="round"/>
+  <path d="m100 16 28 16-28 16" stroke="url(#shaft)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="24" cy="32" r="7" fill="#FFFDF8"/>
+</svg>

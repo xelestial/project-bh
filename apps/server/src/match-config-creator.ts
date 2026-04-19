@@ -5,7 +5,7 @@ import type {
   TreasureDefinition,
   TileDefinition
 } from "../../../packages/domain/src/index.ts";
-import { BOARD_SIZE, createPosition, positionKey } from "../../../packages/domain/src/index.ts";
+import { DEFAULT_MATCH_SETTINGS, createPosition, positionKey } from "../../../packages/domain/src/index.ts";
 
 interface RoomPlayerLike {
   readonly id: string;
@@ -59,8 +59,10 @@ function createBoardTiles(matchId: string): readonly TileDefinition[] {
   const totalTileCount = tileCounts.fire + tileCounts.water + tileCounts.electric;
   const allPositions: TileDefinition["position"][] = [];
 
-  for (let y = 0; y < BOARD_SIZE; y += 1) {
-    for (let x = 0; x < BOARD_SIZE; x += 1) {
+  const rotationZone = PROJECT_BH_TESTPLAY_CONFIG.settings.rotationZone ?? DEFAULT_MATCH_SETTINGS.rotationZone;
+
+  for (let y = rotationZone.origin.y; y < rotationZone.origin.y + rotationZone.height; y += 1) {
+    for (let x = rotationZone.origin.x; x < rotationZone.origin.x + rotationZone.width; x += 1) {
       allPositions.push(createPosition(x, y));
     }
   }

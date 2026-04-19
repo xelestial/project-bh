@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 96" fill="none">
+  <defs>
+    <linearGradient id="slotChestBody" x1="28" y1="22" x2="164" y2="78" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7A5313"/>
+      <stop offset="1" stop-color="#E0B45A"/>
+    </linearGradient>
+  </defs>
+  <rect x="10" y="18" width="172" height="60" rx="24" fill="#2B2415"/>
+  <path d="M28 34h136v28H28z" fill="url(#slotChestBody)" stroke="#F6E0A8" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M28 34c0-10 8-18 18-18h100c10 0 18 8 18 18" stroke="#F6E0A8" stroke-width="4" stroke-linecap="round"/>
+  <path d="M96 34v28" stroke="#F6E0A8" stroke-width="4" stroke-linecap="round"/>
+  <rect x="88" y="44" width="16" height="14" rx="4" fill="#FFF6D8"/>
+</svg>

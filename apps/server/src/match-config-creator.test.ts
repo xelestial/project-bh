@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createMatchInputFromConfig } from "./match-config-creator.ts";
-import { positionKey } from "../../../packages/domain/src/index.ts";
+import { PROJECT_BH_TESTPLAY_CONFIG } from "../../../config/testplay-config.ts";
+import { DEFAULT_MATCH_SETTINGS, positionKey } from "../../../packages/domain/src/index.ts";
 
 test("match config creator deals treasure cards deterministically and preserves the public treasure board slots", () => {
   const players = [
@@ -20,7 +21,7 @@ test("match config creator deals treasure cards deterministically and preserves 
   assert.equal(first.treasures?.length, 8);
   assert.equal(first.treasures?.filter((treasure) => treasure.slot === null).length, 1);
   assert.equal(new Set(first.treasures?.map((treasure) => treasure.id)).size, 8);
-  assert.equal(first.tiles?.length, 30);
+  assert.equal(first.tiles?.length, 15);
   assert.deepEqual(first.tiles, second.tiles);
 
   const tileCounts = (first.tiles ?? []).reduce<Record<string, number>>((counts, tile) => {
@@ -30,10 +31,16 @@ test("match config creator deals treasure cards deterministically and preserves 
     };
   }, {});
 
-  assert.equal(tileCounts.fire, 10);
-  assert.equal(tileCounts.water, 10);
-  assert.equal(tileCounts.electric, 10);
-  assert.equal(new Set(first.tiles?.map((tile) => positionKey(tile.position))).size, 30);
+  assert.equal(tileCounts.fire, 5);
+  assert.equal(tileCounts.water, 5);
+  assert.equal(tileCounts.electric, 5);
+  assert.equal(new Set(first.tiles?.map((tile) => positionKey(tile.position))).size, 15);
+
+  const zone = PROJECT_BH_TESTPLAY_CONFIG.settings.rotationZone ?? DEFAULT_MATCH_SETTINGS.rotationZone;
+  for (const tile of first.tiles ?? []) {
+    assert.ok(tile.position.x >= zone.origin.x && tile.position.x < zone.origin.x + zone.width);
+    assert.ok(tile.position.y >= zone.origin.y && tile.position.y < zone.origin.y + zone.height);
+  }
 });
 
 test("match config creator deals two treasure cards per player", () => {

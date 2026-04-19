@@ -65,6 +65,7 @@ Each command currently requires:
   - `electricBomb`
   - `largeHammer`
   - `fence`
+  - `largeFence`
   - `recoveryPotion`
   - `jump`
   - `hook`
@@ -72,13 +73,15 @@ Each command currently requires:
   - `targetPosition`
   - `targetPlayerId`
   - `fencePositions`
+    - `fence`: 2 straight orthogonally adjacent positions
+    - `largeFence`: 3 straight orthogonally adjacent positions
   - `selection`
   - `direction`
 
 `match.purchaseSpecialCard` also requires:
 
 - `cardType`
-  - current implementation only accepts `fence`
+  - current implementation accepts `fence` and `largeFence`
 
 `match.prepareNextRound` may also include:
 
@@ -146,8 +149,10 @@ This lets the web shell support:
   - authoritative turn affordances for the viewer
     - mandatory-move highlight targets
     - secondary-move highlight targets
+    - visible normal-rotation origin cells for the optional rotate mode
     - whether extra move, throw, rotate, special-card, open-treasure, and end-turn actions are currently available
     - per-special-card availability flags
+  - the resolved turn-order queue after priority submission
   - the current revealed auction card
   - resolved auction winners by offer slot
   - the public treasure-board slot strip
@@ -181,9 +186,11 @@ This lets the web shell support:
   - fake-card details for other players
   - another player's priority-hand, inventory charges, or carried-treasure id
 - Unrevealed auction offers and other players' hidden treasure values stay off the wire to the GUI shell.
+- Treasure ids projected to clients are opaque per-session ids rather than internal slot- or card-derived ids, so the frontend cannot infer treasure numbering from DOM or network payloads.
 
 - Rotation legality is currently not range-limited by player position in the projection layer or rule engine.
 - The GUI may visually mark the configured center `10 x 10` zone, but legality for rotation still comes from server-side selection validation.
+- Treasure placement uses a separate centered `6 x 6` zone inside the `10 x 10` inner board area.
 
 ## Local transport bootstrap
 

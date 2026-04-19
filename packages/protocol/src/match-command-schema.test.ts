@@ -68,6 +68,23 @@ test("protocol accepts a valid special card purchase command", () => {
   assert.equal(result.ok, true);
 });
 
+test("protocol accepts a valid large fence placement command", () => {
+  const result = validateMatchCommand({
+    type: "match.useSpecialCard",
+    version: getCommandVersion(),
+    matchId: "match-1",
+    playerId: "player-1",
+    cardType: "largeFence",
+    fencePositions: [
+      { x: 1, y: 1 },
+      { x: 2, y: 1 },
+      { x: 3, y: 1 }
+    ]
+  });
+
+  assert.equal(result.ok, true);
+});
+
 test("protocol accepts a valid rotate command", () => {
   const result = validateMatchCommand({
     type: "match.rotateTiles",

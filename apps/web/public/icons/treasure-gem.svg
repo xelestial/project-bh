@@ -1,0 +1,20 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gemCore" x1="22" y1="26" x2="106" y2="104" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6DF1FF"/>
+      <stop offset="0.48" stop-color="#29C7E8"/>
+      <stop offset="1" stop-color="#0E7AA7"/>
+    </linearGradient>
+    <linearGradient id="gemGlow" x1="36" y1="18" x2="92" y2="94" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FFFF" stop-opacity="0.92"/>
+      <stop offset="1" stop-color="#F8FFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="18" y="12" width="92" height="104" rx="28" fill="#103F36" fill-opacity="0.18"/>
+  <path d="M63.5 18L88 36.5L99.5 58L64 108L28.5 58L40 36.5L63.5 18Z" fill="url(#gemCore)" stroke="#0E5974" stroke-width="5"/>
+  <path d="M63.5 18L40 36.5L52 57H76L88 36.5L63.5 18Z" fill="#B5FCFF" fill-opacity="0.78"/>
+  <path d="M52 57L64 108L28.5 58L52 57Z" fill="#128FB7" fill-opacity="0.95"/>
+  <path d="M76 57L64 108L99.5 58L76 57Z" fill="#0A6D95" fill-opacity="0.95"/>
+  <path d="M52 57H76L64 108L52 57Z" fill="#39D5F0"/>
+  <path d="M48 30L78 24L90 42L72 50L48 30Z" fill="url(#gemGlow)"/>
+</svg>

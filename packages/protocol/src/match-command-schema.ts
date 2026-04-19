@@ -1,4 +1,5 @@
 import {
+  type FencePositions,
   SPECIAL_CARD_TYPES,
   type AuctionBidState,
   type Direction,
@@ -198,25 +199,29 @@ function validateRotationSelection(value: unknown): ValidationResult<RotationSel
 
 function validateFencePositions(
   value: unknown
-): ValidationResult<readonly [Position, Position]> {
-  if (!Array.isArray(value) || value.length !== 2) {
-    return { ok: false, message: "Fence positions must be a two-item array." };
+): ValidationResult<FencePositions> {
+  if (!Array.isArray(value) || (value.length !== 2 && value.length !== 3)) {
+    return { ok: false, message: "Fence positions must be a two-item or three-item array." };
   }
 
-  const left = validatePosition(value[0]);
-  const right = validatePosition(value[1]);
+  const positions: Position[] = [];
 
-  if (!left.ok) {
-    return left;
-  }
+  for (const entry of value) {
+    const position = validatePosition(entry);
 
-  if (!right.ok) {
-    return right;
+    if (!position.ok) {
+      return position;
+    }
+
+    positions.push(position.value);
   }
 
   return {
     ok: true,
-    value: [left.value, right.value]
+    value:
+      positions.length === 2
+        ? [positions[0]!, positions[1]!]
+        : [positions[0]!, positions[1]!, positions[2]!]
   };
 }
 
@@ -513,7 +518,7 @@ function validateUseSpecialCardCommand(
     cardType: SpecialCardType;
     targetPosition?: Position;
     targetPlayerId?: string;
-    fencePositions?: readonly [Position, Position];
+    fencePositions?: FencePositions;
     selection?: RotationSelection;
     direction?: RotationDirection;
   } = {

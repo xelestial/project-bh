@@ -10,6 +10,9 @@ This guide is for validating that:
 - the host can start a match
 - both clients reconcile against the same authoritative state
 - the current rule slices can be exercised by hand
+- the standard 4-player test setup uses seven openable treasure cards plus one fake card
+- the standard 4-player board setup uses five fire, five water, and five electric tiles seeded inside the rotation zone
+- the standard treasure-placement area is the centered `6 x 6` zone inside the inner `10 x 10` board area
 
 ## Local startup
 
@@ -25,6 +28,12 @@ Start the authoritative server in terminal 1:
 pnpm dev:server
 ```
 
+or from the repo root:
+
+```bash
+./run-server.sh
+```
+
 Expected result:
 
 - the console prints `Project.BH server listening on http://127.0.0.1:8787`
@@ -33,6 +42,18 @@ Start the web client in terminal 2:
 
 ```bash
 pnpm dev:web -- --host 127.0.0.1 --port 5173 --backend-port 8787
+```
+
+or from the repo root:
+
+```bash
+./run-web.sh
+```
+
+If you want one command that starts both processes together:
+
+```bash
+./run-game.sh
 ```
 
 Expected result:
@@ -94,6 +115,8 @@ Expected result:
 - each client sees only its own treasure-card values in the bottom overlay
 - a fake treasure card, when dealt, stays visible only to the receiving player during `treasurePlacement`
 - unopened map treasures never reveal their slot number or score in the shared board view
+- priority cards are displayed as `1-6` card tiles, and used cards stay visible in gray
+- the resolved turn order is shown after priority submission
 
 ## Recommended smoke path
 
@@ -103,7 +126,7 @@ Use this short path for every fresh manual run:
 2. If a fake card is dealt, verify it is shown only to that player and does not produce a placeable map token.
 3. Verify the treasure-placement phase only ends after all real treasure tokens are placed.
 4. In both clients, submit a bid for the currently revealed auction card.
-5. Use `울타리 구매 (1점)` before submitting a bid when you want to verify direct fence-charge purchases during auction.
+5. Use `울타리 구매 (1점)` or `대형 울타리 구매 (2점)` before submitting a bid when you want to verify direct fence-charge purchases during auction.
 6. Verify only one auction card is shown at a time and the next card appears after the previous one resolves.
 7. Submit priority cards from both players.
 8. Verify the active player matches the resolved priority order.

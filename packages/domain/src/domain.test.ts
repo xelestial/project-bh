@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  placeTreasure,
   submitAuctionBids,
   createMatchState,
   createPosition,
@@ -83,6 +84,49 @@ test("priority submissions resolve deterministic turn order with ties moved to t
   ]);
   assert.equal(result.state.round.phase, "inTurn");
   assert.equal(result.state.round.activePlayerId, "player-1");
+});
+
+test("treasure placement is limited to the centered 6x6 treasure zone", () => {
+  const match = createMatchState({
+    matchId: "treasure-zone-match",
+    settings: {
+      treasurePlacementZone: {
+        origin: { x: 7, y: 7 },
+        width: 6,
+        height: 6
+      }
+    },
+    players: [
+      { id: "player-1", name: "Alpha" },
+      { id: "player-2", name: "Bravo" }
+    ],
+    treasures: [
+      {
+        id: "treasure-1",
+        slot: 1,
+        points: 3,
+        ownerPlayerId: "player-1"
+      }
+    ]
+  });
+
+  assert.throws(() => {
+    placeTreasure(match, {
+      playerId: "player-1",
+      treasureId: "treasure-1",
+      position: createPosition(6, 6)
+    });
+  }, {
+    code: "INVALID_POSITION"
+  });
+
+  const result = placeTreasure(match, {
+    playerId: "player-1",
+    treasureId: "treasure-1",
+    position: createPosition(7, 7)
+  });
+
+  assert.deepEqual(result.state.treasures["treasure-1"]?.position, createPosition(7, 7));
 });
 
 test("auction bids award cards and deduct score when the auction resolves", () => {
@@ -342,6 +386,57 @@ test("fence cards can be bought directly during the auction for one point", () =
   assert.equal(playerOne.score, 2);
   assert.equal(playerOne.specialInventory.fence, 3);
   assert.ok(result.events.some((event) => event.type === "specialCardPurchased"));
+});
+
+test("large fence cards can be bought directly during the auction for two points", () => {
+  const match = createAuctionFixture();
+  const result = purchaseSpecialCard(match, "player-1", "largeFence");
+  const playerOne = mustPlayer(result.state, "player-1");
+
+  assert.equal(playerOne.score, 1);
+  assert.equal(playerOne.specialInventory.largeFence, 3);
+  assert.ok(
+    result.events.some(
+      (event) =>
+        event.type === "specialCardPurchased" &&
+        event.cardType === "largeFence" &&
+        event.cost === 2
+    )
+  );
+});
+
+test("large fence cards place a three-tile straight fence and consume one charge", () => {
+  const match = createTwoPlayerMatchFixture({
+    treasures: []
+  });
+  const stepped = moveActivePlayer(match, "player-1", "south").state;
+  const prepared = replacePlayer(stepped, "player-1", (player) => ({
+    ...player,
+    specialInventory: {
+      ...player.specialInventory,
+      largeFence: 1
+    }
+  }));
+  const result = useSpecialCard(prepared, {
+    playerId: "player-1",
+    cardType: "largeFence",
+    fencePositions: [
+      createPosition(1, 2),
+      createPosition(2, 2),
+      createPosition(3, 2)
+    ]
+  });
+  const updatedPlayer = mustPlayer(result.state, "player-1");
+  const fences = Object.values(result.state.board.fences);
+
+  assert.equal(updatedPlayer.specialInventory.largeFence, 0);
+  assert.equal(fences.length, 1);
+  assert.deepEqual(fences[0]?.positions, [
+    createPosition(1, 2),
+    createPosition(2, 2),
+    createPosition(3, 2)
+  ]);
+  assert.equal(result.state.round.activePlayerId, "player-2");
 });
 
 test("special card bombs can modify the board and remove fences", () => {

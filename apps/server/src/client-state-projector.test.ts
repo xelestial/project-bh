@@ -30,14 +30,14 @@ test("player projection keeps treasure slot and score data off the public snapsh
 
   const projectedForPlayerTwo = projectSnapshotForPlayer(createSnapshot(match), "player-2");
 
-  assert.deepEqual(Object.keys(projectedForPlayerTwo.state.treasures), [
-    "treasure-token-1",
-    "treasure-token-2",
-    "treasure-token-3"
-  ]);
-  assert.equal("slot" in projectedForPlayerTwo.state.treasures["treasure-token-1"]!, false);
-  assert.equal("ownerPlayerId" in projectedForPlayerTwo.state.treasures["treasure-token-1"]!, false);
-  assert.equal("points" in projectedForPlayerTwo.state.treasures["treasure-token-1"]!, false);
+  const publicTreasureIds = Object.keys(projectedForPlayerTwo.state.treasures);
+  assert.equal(publicTreasureIds.length, 3);
+  assert.ok(publicTreasureIds.every((id) => id.startsWith("tt-")));
+  assert.ok(publicTreasureIds.every((id) => !id.includes("slot")));
+  assert.ok(publicTreasureIds.every((id) => !id.includes("fake")));
+  assert.equal("slot" in projectedForPlayerTwo.state.treasures[publicTreasureIds[0]!]!, false);
+  assert.equal("ownerPlayerId" in projectedForPlayerTwo.state.treasures[publicTreasureIds[0]!]!, false);
+  assert.equal("points" in projectedForPlayerTwo.state.treasures[publicTreasureIds[0]!]!, false);
   assert.equal("specialInventory" in projectedForPlayerTwo.state.players["player-1"]!, false);
   assert.equal("availablePriorityCards" in projectedForPlayerTwo.state.players["player-1"]!, false);
   assert.equal("carriedTreasureId" in projectedForPlayerTwo.state.players["player-1"]!, false);
@@ -48,7 +48,7 @@ test("player projection keeps treasure slot and score data off the public snapsh
   assert.equal(projectedForPlayerTwo.state.players["player-1"]?.carryingTreasure, false);
   assert.deepEqual(projectedForPlayerTwo.viewer.treasurePlacementHand, [
     {
-      id: "treasure-slot-2",
+      id: projectedForPlayerTwo.viewer.treasurePlacementHand[0]!.id,
       slot: 2,
       points: 4,
       isFake: false
@@ -60,13 +60,13 @@ test("player projection keeps treasure slot and score data off the public snapsh
   const afterPlacement = placeTreasure(match, {
     playerId: "player-1",
     treasureId: "treasure-slot-1",
-    position: createPosition(5, 5)
+    position: createPosition(7, 7)
   }).state;
   const projectedForPlayerOne = projectSnapshotForPlayer(createSnapshot(afterPlacement), "player-1");
 
   assert.deepEqual(projectedForPlayerOne.viewer.treasurePlacementHand, [
     {
-      id: "treasure-fake-1",
+      id: projectedForPlayerOne.viewer.treasurePlacementHand[0]!.id,
       slot: null,
       points: 0,
       isFake: true
@@ -100,9 +100,10 @@ test("only the treasure opener receives the revealed treasure card details", () 
   const projectedForOpener = projectSnapshotForPlayer(createSnapshot(openedMatch), "player-2");
   const projectedForOtherPlayer = projectSnapshotForPlayer(createSnapshot(openedMatch), "player-1");
 
+  assert.ok(projectedForOpener.viewer.revealedTreasureCards[0]!.id.startsWith("tt-"));
   assert.deepEqual(projectedForOpener.viewer.revealedTreasureCards, [
     {
-      id: "treasure-slot-1",
+      id: projectedForOpener.viewer.revealedTreasureCards[0]!.id,
       slot: 1,
       points: 6
     }

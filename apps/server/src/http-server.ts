@@ -5,14 +5,15 @@ import { URL } from "node:url";
 import { WebSocketServer, type WebSocket } from "ws";
 
 import {
-  type CreateMatchStateInput,
+  type CreateMatchStateInput
 } from "../../../packages/domain/src/index.ts";
 import { queryCellActions } from "../../../packages/application/src/index.ts";
-import { validateActionQueryRequest } from "../../../packages/protocol/src/index.ts";
+import { type PendingCellAction, validateActionQueryRequest } from "../../../packages/protocol/src/index.ts";
 import { projectSnapshotForPlayer } from "./client-state-projector.ts";
-import { createServerCompositionRoot } from "./index.ts";
+import { createServerCompositionRoot, type MatchSessionSnapshot } from "./index.ts";
 import { createMatchInputFromConfig } from "./match-config-creator.ts";
 import { resolveHttpServerRuntimeConfig } from "./runtime-config.ts";
+import { resolveClientTreasureId } from "./treasure-client-ids.ts";
 
 type RoomStatus = "lobby" | "started";
 const INVITE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -62,6 +63,75 @@ interface RoomActionQueryRequest {
   readonly playerId: string;
   readonly cell: { readonly x: number; readonly y: number };
   readonly pendingAction?: unknown;
+}
+
+function translateTreasureReferencesForCommand(
+  snapshot: MatchSessionSnapshot,
+  payload: unknown
+): unknown {
+  if (typeof payload !== "object" || payload === null) {
+    return payload;
+  }
+
+  const record = payload as Record<string, unknown>;
+
+  if (typeof record.treasureId === "string") {
+    const resolvedTreasureId = resolveClientTreasureId(snapshot, record.treasureId);
+
+    if (resolvedTreasureId) {
+      return {
+        ...record,
+        treasureId: resolvedTreasureId
+      };
+    }
+  }
+
+  if (
+    record.type === "match.prepareNextRound" &&
+    typeof record.treasurePlacements === "object" &&
+    record.treasurePlacements !== null
+  ) {
+    const translatedPlacements = Object.fromEntries(
+      Object.entries(record.treasurePlacements as Record<string, unknown>).flatMap(([clientTreasureId, position]) => {
+        const resolvedTreasureId = resolveClientTreasureId(snapshot, clientTreasureId);
+        return resolvedTreasureId ? [[resolvedTreasureId, position] as const] : [];
+      })
+    );
+
+    return {
+      ...record,
+      treasurePlacements: translatedPlacements
+    };
+  }
+
+  return payload;
+}
+
+function translateTreasureReferencesForPendingAction(
+  snapshot: MatchSessionSnapshot,
+  pendingAction: PendingCellAction | undefined
+): PendingCellAction | undefined {
+  if (
+    typeof pendingAction !== "object" ||
+    pendingAction === null ||
+    !("kind" in pendingAction) ||
+    pendingAction.kind !== "treasurePlacement" ||
+    !("treasureId" in pendingAction) ||
+    typeof pendingAction.treasureId !== "string"
+  ) {
+    return pendingAction;
+  }
+
+  const resolvedTreasureId = resolveClientTreasureId(snapshot, pendingAction.treasureId);
+
+  if (!resolvedTreasureId) {
+    return pendingAction;
+  }
+
+  return {
+    ...pendingAction,
+    treasureId: resolvedTreasureId
+  };
 }
 
 interface StartHttpServerOptions {
@@ -416,7 +486,7 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
         snapshot.state,
         validation.value.playerId,
         validation.value.cell,
-        validation.value.pendingAction
+        translateTreasureReferencesForPendingAction(snapshot, validation.value.pendingAction)
       );
 
       writeJson(response, 200, {
@@ -441,11 +511,16 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
       }
 
       const payload = await readJson<unknown>(request);
-      const result = engine.dispatchRawCommand(room.sessionId, payload);
+      const snapshot = engine.getSnapshot(room.sessionId);
+      const translatedPayload = translateTreasureReferencesForCommand(snapshot, payload);
+      const result = engine.dispatchRawCommand(room.sessionId, translatedPayload);
       broadcastRoom(roomId);
       const viewerPlayerId =
-        typeof payload === "object" && payload !== null && "playerId" in payload && typeof payload.playerId === "string"
-          ? payload.playerId
+        typeof translatedPayload === "object" &&
+        translatedPayload !== null &&
+        "playerId" in translatedPayload &&
+        typeof translatedPayload.playerId === "string"
+          ? translatedPayload.playerId
           : null;
       writeJson(response, 200, {
         ...result,

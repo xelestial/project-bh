@@ -93,6 +93,21 @@ test("application layer buys fence charges during the auction phase", () => {
   );
 });
 
+test("application layer buys large fence charges during the auction phase", () => {
+  const match = createAuctionFixture();
+  const result = handleMatchCommand(match, {
+    type: "match.purchaseSpecialCard",
+    version: 1,
+    matchId: match.matchId,
+    playerId: "player-1",
+    cardType: "largeFence"
+  });
+
+  assert.equal(result.rejection, null);
+  assert.equal(result.state.players["player-1"]?.specialInventory.largeFence, 3);
+  assert.equal(result.state.players["player-1"]?.score, 1);
+});
+
 test("application layer returns authoritative events for a valid move", () => {
   const match = createTwoPlayerMatchFixture();
 
