@@ -24,6 +24,11 @@ interface RoomPlayer {
   readonly name: string;
 }
 
+interface RoomPlayerSession {
+  readonly playerId: string;
+  readonly sessionToken: string;
+}
+
 interface RoomState {
   readonly roomId: string;
   readonly inviteCode: string;
@@ -43,6 +48,7 @@ interface MutableRoom {
   status: RoomStatus;
   sessionId: string | null;
   sockets: Map<string, Set<WebSocket>>;
+  playerSessions: Map<string, RoomPlayerSession>;
 }
 
 interface CreateRoomRequest {
@@ -55,14 +61,20 @@ interface JoinRoomRequest {
 }
 
 interface StartRoomRequest {
-  readonly playerId: string;
+  readonly sessionToken: string;
 }
 
 interface RoomActionQueryRequest {
   readonly version: 1;
-  readonly playerId: string;
+  readonly sessionToken: string;
   readonly cell: { readonly x: number; readonly y: number };
   readonly pendingAction?: unknown;
+}
+
+interface CreateOrJoinRoomResponse {
+  readonly room: RoomState;
+  readonly playerId: string;
+  readonly sessionToken: string;
 }
 
 function translateTreasureReferencesForCommand(
@@ -155,6 +167,13 @@ function buildMatchInput(room: MutableRoom): CreateMatchStateInput {
   return createMatchInputFromConfig(room.roomId, room.players);
 }
 
+function createPlayerSession(playerId: string): RoomPlayerSession {
+  return {
+    playerId,
+    sessionToken: randomUUID()
+  };
+}
+
 async function readJson<TValue>(request: IncomingMessage): Promise<TValue> {
   const chunks: Buffer[] = [];
 
@@ -234,6 +253,24 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
     return room;
   }
 
+  function resolvePlayerSession(room: MutableRoom, sessionToken: string | null): RoomPlayerSession | null {
+    if (!sessionToken) {
+      return null;
+    }
+
+    return room.playerSessions.get(sessionToken) ?? null;
+  }
+
+  function assertPlayerSession(room: MutableRoom, sessionToken: string | null): RoomPlayerSession {
+    const playerSession = resolvePlayerSession(room, sessionToken);
+
+    if (!playerSession) {
+      throw new Error("Invalid player session.");
+    }
+
+    return playerSession;
+  }
+
   function findRoomByInviteCode(inviteCode: string): MutableRoom | undefined {
     return [...rooms.values()].find((room) => room.inviteCode === inviteCode.toUpperCase());
   }
@@ -272,6 +309,7 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
 
         const roomId = randomUUID().slice(0, 8);
         const hostPlayerId = randomUUID().slice(0, 8);
+        const hostPlayerSession = createPlayerSession(hostPlayerId);
         const room: MutableRoom = {
           roomId,
           inviteCode: createInviteCode(),
@@ -280,13 +318,15 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
           players: [{ id: hostPlayerId, name: body.name }],
           status: "lobby",
           sessionId: null,
-          sockets: new Map()
+          sockets: new Map(),
+          playerSessions: new Map([[hostPlayerSession.sessionToken, hostPlayerSession]])
         };
         rooms.set(roomId, room);
         writeJson(response, 201, {
           room: toRoomState(room),
-          playerId: hostPlayerId
-        });
+          playerId: hostPlayerId,
+          sessionToken: hostPlayerSession.sessionToken
+        } satisfies CreateOrJoinRoomResponse);
         return;
       }
 
@@ -344,12 +384,15 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
       }
 
       const playerId = randomUUID().slice(0, 8);
+      const playerSession = createPlayerSession(playerId);
       room.players.push({ id: playerId, name: body.name });
+      room.playerSessions.set(playerSession.sessionToken, playerSession);
       broadcastRoom(room.roomId);
       writeJson(response, 200, {
         room: toRoomState(room),
-        playerId
-      });
+        playerId,
+        sessionToken: playerSession.sessionToken
+      } satisfies CreateOrJoinRoomResponse);
       return;
     }
 
@@ -380,12 +423,15 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
       }
 
       const playerId = randomUUID().slice(0, 8);
+      const playerSession = createPlayerSession(playerId);
       room.players.push({ id: playerId, name: body.name });
+      room.playerSessions.set(playerSession.sessionToken, playerSession);
       broadcastRoom(roomId);
       writeJson(response, 200, {
         room: toRoomState(room),
-        playerId
-      });
+        playerId,
+        sessionToken: playerSession.sessionToken
+      } satisfies CreateOrJoinRoomResponse);
       return;
     }
 
@@ -400,7 +446,9 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
       const room = assertRoom(roomId);
       const body = await readJson<StartRoomRequest>(request);
 
-      if (room.hostPlayerId !== body.playerId) {
+      const playerSession = assertPlayerSession(room, body.sessionToken);
+
+      if (room.hostPlayerId !== playerSession.playerId) {
         writeJson(response, 403, { error: "Only the host can start the room." });
         return;
       }
@@ -433,7 +481,7 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
       broadcastRoom(roomId);
       writeJson(response, 200, {
         room: toRoomState(room),
-        snapshot: projectSnapshotForPlayer(engine.getSnapshot(room.sessionId), body.playerId)
+        snapshot: projectSnapshotForPlayer(engine.getSnapshot(room.sessionId), playerSession.playerId)
       });
       return;
     }
@@ -447,12 +495,18 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
       }
 
       const room = assertRoom(roomId);
-      const viewerPlayerId = url.searchParams.get("playerId");
+      const playerSession = resolvePlayerSession(room, url.searchParams.get("sessionToken"));
+
+      if (url.searchParams.has("sessionToken") && !playerSession) {
+        writeJson(response, 403, { error: "Invalid player session." });
+        return;
+      }
+
       writeJson(response, 200, {
         room: toRoomState(room),
         snapshot:
-          room.sessionId && viewerPlayerId
-            ? projectSnapshotForPlayer(engine.getSnapshot(room.sessionId), viewerPlayerId)
+          room.sessionId && playerSession
+            ? projectSnapshotForPlayer(engine.getSnapshot(room.sessionId), playerSession.playerId)
             : null
       });
       return;
@@ -482,9 +536,10 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
       }
 
       const snapshot = engine.getSnapshot(room.sessionId);
+      const playerSession = assertPlayerSession(room, validation.value.sessionToken);
       const actions = queryCellActions(
         snapshot.state,
-        validation.value.playerId,
+        playerSession.playerId,
         validation.value.cell,
         translateTreasureReferencesForPendingAction(snapshot, validation.value.pendingAction)
       );
@@ -512,22 +567,30 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
 
       const payload = await readJson<unknown>(request);
       const snapshot = engine.getSnapshot(room.sessionId);
+      if (
+        typeof payload !== "object" ||
+        payload === null ||
+        !("sessionToken" in payload) ||
+        typeof payload.sessionToken !== "string"
+      ) {
+        writeJson(response, 400, { error: "sessionToken is required." });
+        return;
+      }
+
+      const playerSession = assertPlayerSession(room, payload.sessionToken);
       const translatedPayload = translateTreasureReferencesForCommand(snapshot, payload);
-      const result = engine.dispatchRawCommand(room.sessionId, translatedPayload);
+      const authoritativePayload =
+        typeof translatedPayload === "object" && translatedPayload !== null
+          ? {
+              ...translatedPayload,
+              playerId: playerSession.playerId
+            }
+          : translatedPayload;
+      const result = engine.dispatchRawCommand(room.sessionId, authoritativePayload);
       broadcastRoom(roomId);
-      const viewerPlayerId =
-        typeof translatedPayload === "object" &&
-        translatedPayload !== null &&
-        "playerId" in translatedPayload &&
-        typeof translatedPayload.playerId === "string"
-          ? translatedPayload.playerId
-          : null;
       writeJson(response, 200, {
         ...result,
-        snapshot:
-          viewerPlayerId !== null
-            ? projectSnapshotForPlayer(engine.getSnapshot(room.sessionId), viewerPlayerId)
-            : null
+        snapshot: projectSnapshotForPlayer(engine.getSnapshot(room.sessionId), playerSession.playerId)
         });
         return;
       }
@@ -536,6 +599,11 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
     } catch (error) {
       if (error instanceof Error && error.message.startsWith("Unknown room:")) {
         writeJson(response, 404, { error: error.message });
+        return;
+      }
+
+      if (error instanceof Error && error.message === "Invalid player session.") {
+        writeJson(response, 403, { error: error.message });
         return;
       }
 
@@ -589,9 +657,17 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
     }
 
     const roomId = url.searchParams.get("roomId");
-    const playerId = url.searchParams.get("playerId");
+    const sessionToken = url.searchParams.get("sessionToken");
 
-    if (!roomId || !playerId || !rooms.has(roomId)) {
+    if (!roomId || !sessionToken || !rooms.has(roomId)) {
+      socket.destroy();
+      return;
+    }
+
+    const room = rooms.get(roomId);
+    const playerSession = room ? resolvePlayerSession(room, sessionToken) : null;
+
+    if (!room || !playerSession) {
       socket.destroy();
       return;
     }
@@ -599,7 +675,7 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
     websocketServer.handleUpgrade(request, socket, head, (websocket) => {
       websocketServer.emit("connection", websocket, request, {
         roomId,
-        playerId
+        playerId: playerSession.playerId
       });
     });
   });

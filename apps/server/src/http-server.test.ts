@@ -16,6 +16,7 @@ interface RoomResponse {
     readonly sessionId: string | null;
   };
   readonly playerId: string;
+  readonly sessionToken: string;
 }
 
 function waitForOpen(socket: WebSocket): Promise<void> {
@@ -88,7 +89,7 @@ test("http server supports room lifecycle and websocket lobby broadcast", async 
     assert.equal(invitePayload.room.roomId, createPayload.room.roomId);
 
     const socket = new WebSocket(
-      `ws://${server.host}:${server.port}/ws?roomId=${createPayload.room.roomId}&playerId=${createPayload.playerId}`
+      `ws://${server.host}:${server.port}/ws?roomId=${createPayload.room.roomId}&sessionToken=${createPayload.sessionToken}`
     );
     const initialRoomUpdate = waitForMessage<{ type: string }>(socket);
     await waitForOpen(socket);
@@ -124,13 +125,13 @@ test("http server supports room lifecycle and websocket lobby broadcast", async 
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        playerId: createPayload.playerId
+        sessionToken: createPayload.sessionToken
       })
     });
     assert.equal(startRoom.status, 200);
 
     const startedRoom = await fetch(
-      `${baseUrl}/api/rooms/${createPayload.room.roomId}?playerId=${createPayload.playerId}`
+      `${baseUrl}/api/rooms/${createPayload.room.roomId}?sessionToken=${createPayload.sessionToken}`
     );
     assert.equal(startedRoom.status, 200);
     const startedPayload = (await startedRoom.json()) as {
@@ -186,6 +187,23 @@ test("http server returns 404 for unknown rooms without crashing the process", a
     const missingRoom = await fetch(`${baseUrl}/api/rooms/not-real`);
     assert.equal(missingRoom.status, 404);
     assert.deepEqual(await missingRoom.json(), { error: "Unknown room: not-real" });
+
+    const createRoom = await fetch(`${baseUrl}/api/rooms`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        name: "Host",
+        playerCount: 2
+      })
+    });
+    const createPayload = (await createRoom.json()) as RoomResponse;
+    const forbidden = await fetch(
+      `${baseUrl}/api/rooms/${createPayload.room.roomId}?sessionToken=not-a-real-token`
+    );
+    assert.equal(forbidden.status, 403);
+    assert.deepEqual(await forbidden.json(), { error: "Invalid player session." });
 
     const health = await fetch(`${baseUrl}/health`);
     assert.equal(health.status, 200);

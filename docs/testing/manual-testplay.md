@@ -13,6 +13,7 @@ This guide is for validating that:
 - the standard 4-player test setup uses seven openable treasure cards plus one fake card
 - the standard 4-player board setup uses five fire, five water, and five electric tiles seeded inside the rotation zone
 - the standard treasure-placement area is the centered `6 x 6` zone inside the inner `10 x 10` board area
+- browser tabs do not share a player session unless they deliberately reuse the same tab-scoped session state
 
 ## Local startup
 
@@ -112,6 +113,7 @@ Expected result:
 - both clients move from waiting-room state to the live match screen
 - both clients show the same round phase and board state
 - later commands update both windows through WebSocket broadcasts
+- each browser tab keeps its own player session token in `sessionStorage`, so opening a fresh private window should not silently restore the same player as another tab
 - each client sees only its own treasure-card values in the bottom overlay
 - a fake treasure card, when dealt, stays visible only to the receiving player during `treasurePlacement`
 - unopened map treasures never reveal their slot number or score in the shared board view

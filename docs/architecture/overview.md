@@ -13,7 +13,7 @@ Project. BH starts as a domain-centric TypeScript monorepo.
 - `packages/testkit`
   - Reusable fixtures for regression and parity tests.
 - `apps/server`
-  - In-memory authoritative session layer with snapshots, command logs, subscriptions, and reconnect payloads.
+  - In-memory authoritative session layer with snapshots, command logs, subscriptions, reconnect payloads, and server-issued player session tokens.
 - `apps/web`
   - Local client adapter and view-model projection layer over the authoritative server.
 
@@ -58,6 +58,7 @@ The current baseline now covers:
 - in-memory authoritative session management
 - local client adapter and view-model composition
 - player-private snapshot projection for hidden treasure data
+- server-issued reconnect/session tokens so transport auth does not trust public `playerId` values
 - explicit public/private snapshot boundaries
   - public state contains only shared board, round, score, and occupancy data
   - viewer state contains private inventory, hand, and opened-treasure details for one player only

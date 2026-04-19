@@ -34,6 +34,7 @@ Current coverage includes:
 - board bootstrap coverage for five fire, five water, and five electric tiles seeded inside the rotation zone
 - projector coverage for player-private treasure data and opener-only reveal behavior
 - HTTP integration coverage for public/private snapshot separation and unknown-room rejection safety
+- HTTP integration coverage for invalid session-token rejection and secure per-player reconnect flow
 
 ## Regression policy
 

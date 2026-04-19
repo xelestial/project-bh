@@ -31,7 +31,7 @@ export type PendingCellAction =
 
 export interface ActionQueryRequest {
   readonly version: 1;
-  readonly playerId: string;
+  readonly sessionToken: string;
   readonly cell: Position;
   readonly pendingAction?: PendingCellAction;
 }
@@ -147,8 +147,8 @@ export function validateActionQueryRequest(value: unknown):
     return { ok: false, message: "Unsupported action query version." };
   }
 
-  if (!isString(value.playerId)) {
-    return { ok: false, message: "playerId must be a non-empty string." };
+  if (!isString(value.sessionToken)) {
+    return { ok: false, message: "sessionToken must be a non-empty string." };
   }
 
   const cell = validatePosition(value.cell);
@@ -167,7 +167,7 @@ export function validateActionQueryRequest(value: unknown):
     ok: true,
     value: {
       version: 1,
-      playerId: value.playerId,
+      sessionToken: value.sessionToken,
       cell,
       ...(pendingAction ? { pendingAction } : {})
     }

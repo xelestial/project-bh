@@ -25,6 +25,8 @@ Each command currently requires:
 - `matchId`
 - `playerId`
 
+At the transport edge, the local HTTP/WebSocket shell now authenticates the acting player with a server-issued `sessionToken` and the server injects the authoritative `playerId` before command validation and application handling.
+
 `match.movePlayer` also requires:
 
 - `direction`: `north | east | south | west`
@@ -103,7 +105,7 @@ The GUI shell now uses a backend-validated cell-action query path before sending
   - `POST /api/rooms/:roomId/actions/query`
 - Request shape:
   - `version`
-  - `playerId`
+  - `sessionToken`
   - `cell`
   - optional `pendingAction`
 - Response shape:
@@ -123,12 +125,32 @@ The local multiplayer shell now supports party-style invite entry instead of req
   - `roomId`
   - `inviteCode`
   - `playerId`
+  - `sessionToken`
 - Invite endpoints:
   - `GET /api/invite/:inviteCode`
     - returns room preview metadata for the waiting room
   - `POST /api/invite/:inviteCode/join`
     - joins a lobby without exposing the raw room id in the primary client flow
 - Existing room endpoints remain valid for server internals, snapshot refresh, and websocket routing.
+
+Player session transport now behaves like this:
+
+- `POST /api/rooms`
+  - returns a new `playerId` plus a private `sessionToken`
+- `POST /api/invite/:inviteCode/join`
+  - returns a new `playerId` plus a private `sessionToken`
+- `GET /api/rooms/:roomId?sessionToken=...`
+  - restores the viewer-specific snapshot for that player session
+- `POST /api/rooms/:roomId/start`
+  - accepts `sessionToken`, not raw `playerId`
+- `POST /api/rooms/:roomId/actions/query`
+  - accepts `sessionToken`, not raw `playerId`
+- `POST /api/rooms/:roomId/commands`
+  - accepts `sessionToken`, not raw `playerId`
+- `GET /ws?roomId=...&sessionToken=...`
+  - binds the socket to the server-resolved player session
+
+This means `playerId` is no longer treated as a secret reconnect credential on the wire.
 
 This lets the web shell support:
 
@@ -187,6 +209,7 @@ This lets the web shell support:
   - another player's priority-hand, inventory charges, or carried-treasure id
 - Unrevealed auction offers and other players' hidden treasure values stay off the wire to the GUI shell.
 - Treasure ids projected to clients are opaque per-session ids rather than internal slot- or card-derived ids, so the frontend cannot infer treasure numbering from DOM or network payloads.
+- Viewer restoration in the web shell is now stored in tab-scoped `sessionStorage`, so separate browser windows do not silently reuse the same player session by sharing a local reconnect record.
 
 - Rotation legality is currently not range-limited by player position in the projection layer or rule engine.
 - The GUI may visually mark the configured center `10 x 10` zone, but legality for rotation still comes from server-side selection validation.

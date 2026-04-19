@@ -34,3 +34,4 @@ The first parity targets should be:
 - protocol snapshot samples
 - server rejection catalogs
 - player-private treasure projection samples for Unity client parity checks
+- secure reconnect/session-token samples so Unity can match the same transport-auth contract without trusting public player ids

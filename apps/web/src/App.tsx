@@ -162,6 +162,12 @@ interface RoomEnvelope {
   snapshot: ProjectedSnapshot | null;
 }
 
+interface AuthenticatedRoomResponse {
+  room: RoomState;
+  playerId: string;
+  sessionToken: string;
+}
+
 interface CommandResponse {
   rejection: { message: string } | null;
   snapshot: ProjectedSnapshot | null;
@@ -198,6 +204,7 @@ const ACTIVE_SESSION_STORAGE_KEY = "project-bh.active-session";
 interface ActiveSessionEntry {
   roomId: string;
   playerId: string;
+  sessionToken: string;
 }
 
 function normalizeInviteCode(value: string): string {
@@ -247,7 +254,7 @@ function writeRecentRooms(entries: readonly RecentRoomEntry[]): void {
 
 function readActiveSession(): ActiveSessionEntry | null {
   try {
-    const raw = window.localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
+    const raw = window.sessionStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
 
     if (!raw) {
       return null;
@@ -261,11 +268,14 @@ function readActiveSession(): ActiveSessionEntry | null {
       "roomId" in parsed &&
       typeof parsed.roomId === "string" &&
       "playerId" in parsed &&
-      typeof parsed.playerId === "string"
+      typeof parsed.playerId === "string" &&
+      "sessionToken" in parsed &&
+      typeof parsed.sessionToken === "string"
     ) {
       return {
         roomId: parsed.roomId,
-        playerId: parsed.playerId
+        playerId: parsed.playerId,
+        sessionToken: parsed.sessionToken
       };
     }
   } catch {
@@ -276,11 +286,11 @@ function readActiveSession(): ActiveSessionEntry | null {
 }
 
 function writeActiveSession(entry: ActiveSessionEntry): void {
-  window.localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, JSON.stringify(entry));
+  window.sessionStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, JSON.stringify(entry));
 }
 
 function clearActiveSession(): void {
-  window.localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
+  window.sessionStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
 }
 
 function upsertRecentRoom(room: RoomState): RecentRoomEntry[] {
@@ -1034,6 +1044,7 @@ export function App() {
   const [recentRooms, setRecentRooms] = useState<RecentRoomEntry[]>([]);
   const [room, setRoom] = useState<RoomState | null>(null);
   const [playerId, setPlayerId] = useState("");
+  const [sessionToken, setSessionToken] = useState("");
   const [snapshot, setSnapshot] = useState<ProjectedSnapshot | null>(null);
   const [message, setMessage] = useState("");
   const [shareMessage, setShareMessage] = useState("");
@@ -1135,7 +1146,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (room || playerId) {
+    if (room || playerId || sessionToken) {
       return;
     }
 
@@ -1152,7 +1163,7 @@ export function App() {
         const payload = await requestJson<RoomEnvelope>(
           resolveHttpUrl(
             transportConfig,
-            `/api/rooms/${activeSession.roomId}?playerId=${activeSession.playerId}`
+            `/api/rooms/${activeSession.roomId}?sessionToken=${encodeURIComponent(activeSession.sessionToken)}`
           )
         );
 
@@ -1162,6 +1173,7 @@ export function App() {
 
         setRoom(payload.room);
         setPlayerId(activeSession.playerId);
+        setSessionToken(activeSession.sessionToken);
         setSnapshot(payload.snapshot);
         setInvitePreview(payload.room);
         setInviteCode(payload.room.inviteCode);
@@ -1176,7 +1188,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [playerId, room, transportConfig]);
+  }, [playerId, room, sessionToken, transportConfig]);
 
   useEffect(() => {
     if (name.trim()) {
@@ -1198,20 +1210,20 @@ export function App() {
   }, [room?.inviteCode, inviteCode]);
 
   useEffect(() => {
-    if (room && playerId) {
-      writeActiveSession({ roomId: room.roomId, playerId });
+    if (room && playerId && sessionToken) {
+      writeActiveSession({ roomId: room.roomId, playerId, sessionToken });
     }
-  }, [playerId, room?.roomId]);
+  }, [playerId, room?.roomId, sessionToken]);
 
   useEffect(() => {
-    if (!room || !playerId) {
+    if (!room || !playerId || !sessionToken) {
       return;
     }
 
     const socket = new WebSocket(
       resolveWebSocketUrl(
         transportConfig,
-        `/ws?roomId=${room.roomId}&playerId=${playerId}`
+        `/ws?roomId=${room.roomId}&sessionToken=${encodeURIComponent(sessionToken)}`
       )
     );
 
@@ -1229,7 +1241,7 @@ export function App() {
     });
 
     return () => socket.close();
-  }, [room?.roomId, playerId, transportConfig]);
+  }, [room?.roomId, playerId, sessionToken, transportConfig]);
 
   useEffect(() => {
     const onWindowClick = () => setContextMenu(null);
@@ -1289,7 +1301,7 @@ export function App() {
 
   async function createRoom() {
     try {
-      const payload = await requestJson<{ room: RoomState; playerId: string }>(
+      const payload = await requestJson<AuthenticatedRoomResponse>(
         resolveHttpUrl(transportConfig, "/api/rooms"),
         {
           method: "POST",
@@ -1302,10 +1314,11 @@ export function App() {
 
       setRoom(payload.room);
       setPlayerId(payload.playerId);
+      setSessionToken(payload.sessionToken);
       setSnapshot(null);
       setInvitePreview(payload.room);
       setRecentRooms(upsertRecentRoom(payload.room));
-      writeActiveSession({ roomId: payload.room.roomId, playerId: payload.playerId });
+      writeActiveSession({ roomId: payload.room.roomId, playerId: payload.playerId, sessionToken: payload.sessionToken });
       setMessage("");
       setShareMessage("");
     } catch (error) {
@@ -1337,7 +1350,7 @@ export function App() {
     const normalizedInviteCode = normalizeInviteCode(inviteCode);
 
     try {
-      const payload = await requestJson<{ room: RoomState; playerId: string }>(
+      const payload = await requestJson<AuthenticatedRoomResponse>(
         resolveHttpUrl(transportConfig, `/api/invite/${normalizedInviteCode}/join`),
         {
           method: "POST",
@@ -1346,10 +1359,11 @@ export function App() {
       );
       setRoom(payload.room);
       setPlayerId(payload.playerId);
+      setSessionToken(payload.sessionToken);
       setSnapshot(null);
       setInvitePreview(payload.room);
       setRecentRooms(upsertRecentRoom(payload.room));
-      writeActiveSession({ roomId: payload.room.roomId, playerId: payload.playerId });
+      writeActiveSession({ roomId: payload.room.roomId, playerId: payload.playerId, sessionToken: payload.sessionToken });
       setMessage("");
       setShareMessage("");
     } catch (error) {
@@ -1358,7 +1372,7 @@ export function App() {
   }
 
   async function startRoom() {
-    if (!room) {
+    if (!room || !sessionToken) {
       return;
     }
 
@@ -1367,13 +1381,13 @@ export function App() {
         resolveHttpUrl(transportConfig, `/api/rooms/${room.roomId}/start`),
         {
           method: "POST",
-          body: JSON.stringify({ playerId })
+          body: JSON.stringify({ sessionToken })
         }
       );
       setRoom(payload.room);
       setSnapshot(payload.snapshot);
       setRecentRooms(upsertRecentRoom(payload.room));
-      writeActiveSession({ roomId: payload.room.roomId, playerId });
+      writeActiveSession({ roomId: payload.room.roomId, playerId, sessionToken });
       setMessage("");
     } catch (error) {
       setMessage((error as Error).message);
@@ -1381,18 +1395,18 @@ export function App() {
   }
 
   async function refreshRoom() {
-    if (!room) {
+    if (!room || !sessionToken) {
       return;
     }
 
     try {
       const payload = await requestJson<RoomEnvelope>(
-        resolveHttpUrl(transportConfig, `/api/rooms/${room.roomId}?playerId=${playerId}`)
+        resolveHttpUrl(transportConfig, `/api/rooms/${room.roomId}?sessionToken=${encodeURIComponent(sessionToken)}`)
       );
       setRoom(payload.room);
       setSnapshot(payload.snapshot);
       setRecentRooms(upsertRecentRoom(payload.room));
-      writeActiveSession({ roomId: payload.room.roomId, playerId });
+      writeActiveSession({ roomId: payload.room.roomId, playerId, sessionToken });
       setMessage("");
     } catch (error) {
       setMessage((error as Error).message);
@@ -1400,7 +1414,7 @@ export function App() {
   }
 
   async function sendCommand(command: ActionCommandPayload) {
-    if (!room || !snapshot) {
+    if (!room || !snapshot || !sessionToken) {
       return;
     }
 
@@ -1412,7 +1426,7 @@ export function App() {
           body: JSON.stringify({
             version: 1,
             matchId: snapshot.state.matchId,
-            playerId,
+            sessionToken,
             ...command
           })
         }
@@ -1420,7 +1434,8 @@ export function App() {
 
       if (payload.snapshot) {
         setSnapshot(payload.snapshot);
-        writeActiveSession({ roomId: room.roomId, playerId });
+        setPlayerId(payload.snapshot.viewer.playerId);
+        writeActiveSession({ roomId: room.roomId, playerId: payload.snapshot.viewer.playerId, sessionToken });
       }
       setPendingAction(null);
       setMessage(payload.rejection?.message ?? "");
@@ -1430,7 +1445,7 @@ export function App() {
   }
 
   async function queryActions(eventX: number, eventY: number, cell: { x: number; y: number }) {
-    if (!room || !snapshot) {
+    if (!room || !snapshot || !sessionToken) {
       return;
     }
 
@@ -1441,7 +1456,7 @@ export function App() {
           method: "POST",
           body: JSON.stringify({
             version: 1,
-            playerId,
+            sessionToken,
             cell,
             ...(pendingAction ? { pendingAction } : {})
           })
