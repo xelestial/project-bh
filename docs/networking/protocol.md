@@ -27,6 +27,8 @@ Each command currently requires:
 
 At the transport edge, the local HTTP/WebSocket shell now authenticates the acting player with a server-issued `sessionToken` and the server injects the authoritative `playerId` before command validation and application handling.
 
+Command requests may include `commandId`. The backend stores command envelopes with the resolved `playerId`; repeated `commandId` values are idempotent and do not advance the canonical match snapshot a second time.
+
 `match.movePlayer` also requires:
 
 - `direction`: `north | east | south | west`
@@ -162,6 +164,15 @@ Player session transport now behaves like this:
 
 This means `playerId` is no longer treated as a secret reconnect credential on the wire.
 
+Session token policy:
+
+- session tokens are generated with cryptographic randomness
+- Redis/runtime storage uses HMAC token hashes, not plaintext session tokens
+- command handling resolves the player from the token hash before validation
+- client-supplied `playerId` is overwritten at the transport boundary
+- host-only actions compare against the resolved player id
+- invite codes are not credentials and are generated with crypto-backed randomness
+
 This lets the web shell support:
 
 - shareable invite links
@@ -174,6 +185,9 @@ This lets the web shell support:
 ## Player-specific projection
 
 - Room snapshots sent to clients are now projected per player.
+- Frontend-facing match data is exposed through a selector registry. The current React-compatible bundle is `match.snapshotBundle.v1`.
+- Selector envelopes include `selectorId`, `version`, `revision`, and `payload`.
+- Selector envelopes are validated in `packages/protocol`, and raw `MatchState` is not sent as the frontend contract.
 - The server uses the same player-specific projection rules for both:
   - `GET /api/rooms/:roomId?playerId=...`
   - websocket `room.updated` payloads for started rooms
@@ -234,6 +248,11 @@ The local multiplayer shell now supports explicit runtime transport configuratio
 - Server bind host and port:
   - CLI: `--host`, `--port`
   - env: `HOST`, `PORT`
+- Server runtime:
+  - env: `RUNTIME_STORE=memory|redis`
+  - env: `REDIS_URL` when Redis mode is enabled
+  - env: `SESSION_TOKEN_SECRET` when Redis mode is enabled
+  - env: `CORS_ALLOWED_ORIGINS` as a comma-separated allowlist
 - Web dev-server bind host and port:
   - CLI: `--host`, `--port`
   - env: `WEB_HOST`, `WEB_PORT`
@@ -244,6 +263,23 @@ The local multiplayer shell now supports explicit runtime transport configuratio
   - env override: `BACKEND_HTTP_URL`, `BACKEND_WS_URL`
 
 This keeps port binding and connection routing outside the rules engine while preserving the same authoritative command protocol.
+
+## Redis command and event transport
+
+The runtime store defines these logical streams:
+
+- `bh:match:{sessionId}:commands`
+  - backend gateway writes command envelopes after auth and protocol validation
+- `bh:match:{sessionId}:events`
+  - engine worker writes authoritative command results
+
+The in-memory adapter uses the same port contract for local tests. The Redis adapter serializes records as JSON and stores command/event history in Redis Streams. Redis keys are prefixed so deployment environments can isolate Project. BH data.
+
+## Request protection
+
+- CORS can be restricted by `CORS_ALLOWED_ORIGINS`.
+- Room creation, room joins, invite lookups, action queries, commands, and WebSocket upgrades pass through fixed-window rate limits.
+- Rate-limit counters live behind the runtime-store port and can be backed by Redis.
 
 ## Next protocol expansions
 

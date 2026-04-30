@@ -37,6 +37,15 @@ Current coverage includes:
 - projector coverage for player-private treasure data and opener-only reveal behavior
 - HTTP integration coverage for public/private snapshot separation and unknown-room rejection safety
 - HTTP integration coverage for invalid session-token rejection and secure per-player reconnect flow
+- selector envelope tests for exact frontend payload boundaries
+- selector registry tests for public/viewer private-data separation
+- secure session-token tests for entropy, HMAC hashing, constant-time verification, and redaction
+- runtime-store contract tests for room/session/snapshot/stream persistence
+- Redis runtime-store integration tests gated by `REDIS_URL`
+- engine-worker tests for command application, rejection events, snapshot revision, and idempotency
+- HTTP command tests proving backend-resolved player identity and repeated `commandId` idempotency
+- CORS and fixed-window rate-limit tests
+- online-game benchmark smoke coverage for room creation, joins, starts, and commands
 
 ## Regression policy
 
@@ -66,6 +75,24 @@ pnpm test
 pnpm typecheck
 ```
 
+Run the optional Redis integration test with:
+
+```bash
+REDIS_URL=redis://127.0.0.1:6379 pnpm test -- apps/server/src/runtime/redis-runtime-store.integration.test.ts
+```
+
+Run the online-game benchmark smoke test with:
+
+```bash
+pnpm test -- apps/server/src/benchmark/online-game-benchmark.test.ts
+```
+
+Run a larger local benchmark with:
+
+```bash
+BH_BENCH_ROOMS=100 BH_BENCH_PLAYERS=4 BH_BENCH_COMMANDS=1 pnpm benchmark:online
+```
+
 ## Human playtest baseline
 
 - Local human-vs-human playtests should run against the authoritative HTTP/WebSocket server, not a client-only mock.
@@ -82,6 +109,7 @@ pnpm typecheck
 
 1. Golden fixtures for cross5 and rectangle6 rotation examples.
 2. Scenario fixtures for river, ice drop, elimination, and round-tick status behavior.
-3. Replay-oriented tests for full five-round command logs.
-4. UI component tests for the React playtest shell.
-5. Expand browser smoke coverage to include special-card targeting, fence purchase, and next-round progression.
+3. Multi-process Redis fanout tests with a shared Redis service in CI.
+4. Replay-oriented tests for full five-round command logs.
+5. UI component tests for the React playtest shell.
+6. Expand browser smoke coverage to include special-card targeting, fence purchase, and next-round progression.

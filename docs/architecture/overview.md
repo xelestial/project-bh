@@ -13,7 +13,7 @@ Project. BH starts as a domain-centric TypeScript monorepo.
 - `packages/testkit`
   - Reusable fixtures for regression and parity tests.
 - `apps/server`
-  - In-memory authoritative session layer with snapshots, command logs, subscriptions, reconnect payloads, and server-issued player session tokens.
+  - Authoritative HTTP/WebSocket gateway, selector projection, secure session handling, runtime-store ports, Redis adapter, and engine worker.
 - `apps/web`
   - Local client adapter and view-model projection layer over the authoritative server.
 
@@ -61,6 +61,11 @@ The current baseline now covers:
 - local client adapter and view-model composition
 - player-private snapshot projection for hidden treasure data
 - server-issued reconnect/session tokens so transport auth does not trust public `playerId` values
+- HMAC-hashed session token storage, cryptographic invite-code generation, CORS allowlists, and fixed-window request limits
+- runtime-store ports for rooms, sessions, match snapshots, command streams, event streams, idempotency records, and rate-limit counters
+- Redis runtime adapter that stores canonical JSON records and uses Redis Streams for command/event transport
+- authoritative engine worker that applies queued command envelopes through `packages/application` and writes canonical snapshots/events
+- online-game benchmark harness for many rooms, players, commands, and optional WebSocket clients
 - explicit public/private snapshot boundaries
   - public state contains only shared board, round, score, and occupancy data
   - viewer state contains private inventory, hand, and opened-treasure details for one player only
@@ -69,9 +74,24 @@ The current baseline now covers:
 
 ## Near-term build order
 
-1. Deepen scenario coverage for remaining ambiguous rule interactions.
-2. Expand server snapshots and replay export into a durable external contract.
-3. Replace the local client adapter with a real React board shell.
-4. Add persistence and richer operational telemetry around the authoritative loop.
+1. Wire production deployment to `RUNTIME_STORE=redis` with `REDIS_URL`, `SESSION_TOKEN_SECRET`, and explicit `CORS_ALLOWED_ORIGINS`.
+2. Deepen selector schemas from the current snapshot bundle into smaller public/viewer selector contracts.
+3. Add Redis-backed reconnect and multi-process fanout tests once a shared Redis instance is available in CI.
+4. Deepen scenario coverage for remaining ambiguous rule interactions.
+5. Expand replay export into a durable external contract.
 
 The more detailed sequence now lives in `docs/planning/implementation-roadmap.md`.
+
+## Redis authoritative runtime
+
+Redis is infrastructure, not the rules engine. Domain and application packages still own deterministic rules and command application. The server layer now exposes runtime-store ports so the local in-memory adapter and Redis adapter share the same responsibilities:
+
+- room records and public lobby metadata
+- player session records keyed by HMAC token hash
+- canonical match snapshots with revision and log length
+- backend-to-engine command streams
+- engine-to-backend event streams
+- idempotency records keyed by command id
+- rate-limit counters
+
+The HTTP/WebSocket process acts as a backend gateway. It authenticates a private `sessionToken`, injects the authoritative `playerId`, validates command payloads through `packages/protocol`, appends command envelopes, and returns selector-projected snapshots. The engine worker applies command envelopes through `handleMatchCommand`, persists the next canonical snapshot, writes event envelopes, and preserves idempotency for repeated `commandId` values.
