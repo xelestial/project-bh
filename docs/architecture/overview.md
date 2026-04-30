@@ -71,6 +71,7 @@ The current baseline now covers:
 - granular selector contracts for `publicState`, `viewerPrivate`, and `turnHints`, with the existing React snapshot bundle composed from those smaller contracts
 - selector golden samples in `docs/fixtures/selectors/` for React and Unity parity checks
 - rule scenario golden samples in `docs/fixtures/rules/` for river formation, river movement blocking, and ice-triggered treasure drops
+- replay export schema and compact command-log samples in `docs/fixtures/replays/`
 - explicit public/private snapshot boundaries
   - public state contains only shared board, round, score, and occupancy data
   - viewer state contains private inventory, hand, and opened-treasure details for one player only
@@ -79,9 +80,8 @@ The current baseline now covers:
 
 ## Near-term build order
 
-1. Expand replay export into a durable external contract.
-2. Add cross5 and rectangle6 rotation golden fixtures.
-3. Add Redis-backed reconnect and multi-process fanout tests to CI once a shared Redis service is available.
+1. Add cross5 and rectangle6 rotation golden fixtures.
+2. Add Redis-backed reconnect and multi-process fanout tests to CI once a shared Redis service is available.
 
 The more detailed sequence now lives in `docs/planning/implementation-roadmap.md`.
 

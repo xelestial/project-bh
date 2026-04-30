@@ -309,5 +309,4 @@ For multi-process fanout, each backend instance has its own fanout consumer name
 1. Shared response schema validation for projected room snapshots.
 2. Server-to-client event envelope with message ids.
 3. Rejection code catalog shared by server and clients.
-4. Snapshot plus event replay samples for parity tests.
-5. Durable persistence DTOs for rooms and replays.
+4. Durable persistence DTOs for rooms.

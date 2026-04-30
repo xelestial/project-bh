@@ -31,7 +31,7 @@ The first parity targets should be:
 
 ## Expected future parity assets
 
-- replay fixtures for full rounds
+- replay fixtures for full rounds, starting with `docs/fixtures/replays/five-round-command-log.v1.json`
 - tile interaction golden cases, including river and ice samples in `docs/fixtures/rules/`
 - rotation golden cases
 - auction and special-card scenario fixtures
