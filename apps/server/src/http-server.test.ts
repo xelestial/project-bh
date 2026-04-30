@@ -499,3 +499,90 @@ test("command endpoint queues commands with resolved player identity and idempot
     await server.close();
   }
 });
+
+test("http server rejects disallowed cors origins", async (context) => {
+  let server;
+
+  try {
+    server = await startHttpServer({
+      port: 0,
+      host: "127.0.0.1",
+      corsAllowedOrigins: ["https://allowed.example"]
+    });
+  } catch (error) {
+    if (isListenPermissionError(error)) {
+      context.skip("Sandbox blocks local port binding; run this test in a normal local shell.");
+      return;
+    }
+
+    throw error;
+  }
+
+  const baseUrl = `http://${server.host}:${server.port}`;
+
+  try {
+    const response = await fetch(`${baseUrl}/health`, {
+      headers: {
+        Origin: "https://evil.example"
+      }
+    });
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), { error: "Origin is not allowed." });
+  } finally {
+    await server.close();
+  }
+});
+
+test("http server rate limits room creation", async (context) => {
+  let server;
+
+  try {
+    server = await startHttpServer({
+      port: 0,
+      host: "127.0.0.1",
+      rateLimits: {
+        "room.create": {
+          limit: 1,
+          windowMs: 60_000
+        }
+      }
+    });
+  } catch (error) {
+    if (isListenPermissionError(error)) {
+      context.skip("Sandbox blocks local port binding; run this test in a normal local shell.");
+      return;
+    }
+
+    throw error;
+  }
+
+  const baseUrl = `http://${server.host}:${server.port}`;
+
+  try {
+    const body = JSON.stringify({
+      name: "Host",
+      playerCount: 2
+    });
+    const first = await fetch(`${baseUrl}/api/rooms`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body
+    });
+    assert.equal(first.status, 201);
+
+    const second = await fetch(`${baseUrl}/api/rooms`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body
+    });
+    assert.equal(second.status, 429);
+    assert.deepEqual(await second.json(), { error: "Rate limit exceeded." });
+  } finally {
+    await server.close();
+  }
+});

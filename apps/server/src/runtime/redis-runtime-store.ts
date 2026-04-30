@@ -18,6 +18,8 @@ interface RedisRuntimeClient {
   set(key: string, value: string): Promise<unknown>;
   get(key: string): Promise<string | null>;
   keys(pattern: string): Promise<readonly string[]>;
+  incr(key: string): Promise<number>;
+  pExpireAt(key: string, millisecondsTimestamp: number): Promise<unknown>;
   xAdd(key: string, id: "*", message: Record<string, string>): Promise<string>;
   xRange(
     key: string,
@@ -114,7 +116,8 @@ export function createRedisRuntimeStore(
     commands: (sessionId: string) => `${prefix}:match:${sessionId}:commands`,
     events: (sessionId: string) => `${prefix}:match:${sessionId}:events`,
     idempotency: (sessionId: string, commandId: string) =>
-      `${prefix}:match:${sessionId}:idempotency:${commandId}`
+      `${prefix}:match:${sessionId}:idempotency:${commandId}`,
+    rateLimit: (key: string) => `${prefix}:ratelimit:${key}`
   };
 
   async function readRooms(): Promise<readonly RoomRecord[]> {
@@ -246,6 +249,18 @@ export function createRedisRuntimeStore(
         return decode<IdempotencyRecord>(
           await options.client.get(keys.idempotency(sessionId, commandId))
         );
+      }
+    },
+    rateLimits: {
+      async increment(key, windowExpiresAt) {
+        const redisKey = keys.rateLimit(key);
+        const count = await options.client.incr(redisKey);
+
+        if (count === 1) {
+          await options.client.pExpireAt(redisKey, windowExpiresAt);
+        }
+
+        return count;
       }
     }
   };

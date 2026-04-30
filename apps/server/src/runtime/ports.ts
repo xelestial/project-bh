@@ -110,10 +110,15 @@ export interface IdempotencyRepository {
   get(sessionId: string, commandId: string): Promise<IdempotencyRecord | null>;
 }
 
+export interface RateLimitCounterRepository {
+  increment(key: string, windowExpiresAt: number): Promise<number>;
+}
+
 export interface RuntimeStore {
   readonly rooms: RoomRepository;
   readonly sessions: SessionRepository;
   readonly matches: MatchRepository;
   readonly streams: RuntimeStreams;
   readonly idempotency: IdempotencyRepository;
+  readonly rateLimits: RateLimitCounterRepository;
 }

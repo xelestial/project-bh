@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { URL } from "node:url";
 
 import { WebSocketServer, type WebSocket } from "ws";
@@ -32,6 +32,10 @@ import {
   createSessionToken,
   hashSessionToken
 } from "./security/session-token.ts";
+import {
+  createFixedWindowRateLimiter,
+  type RateLimitScope
+} from "./security/rate-limit.ts";
 import { resolveClientTreasureId } from "./treasure-client-ids.ts";
 
 type RoomStatus = "lobby" | "started";
@@ -189,6 +193,10 @@ interface StartHttpServerOptions {
   readonly host?: string;
   readonly runtimeStore?: RuntimeStore;
   readonly sessionTokenSecret?: string;
+  readonly corsAllowedOrigins?: readonly string[];
+  readonly rateLimits?: Partial<
+    Record<RateLimitScope, { readonly limit: number; readonly windowMs: number }>
+  >;
 }
 
 function toRoomState(room: MutableRoom): RoomState {
@@ -266,8 +274,6 @@ function writeJson(
 ): void {
   response.statusCode = statusCode;
   response.setHeader("Content-Type", "application/json; charset=utf-8");
-  response.setHeader("Access-Control-Allow-Origin", "*");
-  response.setHeader("Access-Control-Allow-Headers", "Content-Type");
   response.end(JSON.stringify(payload));
 }
 
@@ -277,8 +283,78 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
   const runtimeStore = options.runtimeStore ?? createInMemoryRuntimeStore();
   const engineWorker = createEngineWorker({ store: runtimeStore });
   const sessionTokenSecret = options.sessionTokenSecret ?? "project-bh-local-session-secret";
+  const corsAllowedOrigins = options.corsAllowedOrigins ?? [];
+  const rateLimitOptions = options.rateLimits ?? {};
   const rooms = new Map<string, MutableRoom>();
   const websocketServer = new WebSocketServer({ noServer: true });
+
+  function createRateLimiter(scope: RateLimitScope) {
+    const config = rateLimitOptions[scope] ?? {
+      limit: 1_000,
+      windowMs: 60_000
+    };
+
+    return createFixedWindowRateLimiter({
+      store: runtimeStore,
+      limit: config.limit,
+      windowMs: config.windowMs
+    });
+  }
+
+  const rateLimiters: Record<RateLimitScope, ReturnType<typeof createRateLimiter>> = {
+    "room.create": createRateLimiter("room.create"),
+    "room.join": createRateLimiter("room.join"),
+    "invite.lookup": createRateLimiter("invite.lookup"),
+    "action.query": createRateLimiter("action.query"),
+    command: createRateLimiter("command"),
+    "ws.upgrade": createRateLimiter("ws.upgrade")
+  };
+
+  function resolveRequestIdentity(request: IncomingMessage): string {
+    return request.socket.remoteAddress ?? "unknown";
+  }
+
+  async function enforceRateLimit(
+    request: IncomingMessage,
+    response: ServerResponse,
+    scope: RateLimitScope
+  ): Promise<boolean> {
+    const result = await rateLimiters[scope].check({
+      scope,
+      identity: resolveRequestIdentity(request)
+    });
+
+    if (result.allowed) {
+      response.setHeader("RateLimit-Remaining", String(result.remaining));
+      return true;
+    }
+
+    response.setHeader("Retry-After", String(Math.ceil(result.retryAfterMs / 1000)));
+    writeJson(response, 429, { error: "Rate limit exceeded." });
+    return false;
+  }
+
+  function applyCors(request: IncomingMessage, response: ServerResponse): boolean {
+    const origin = request.headers.origin;
+
+    if (!origin || typeof origin !== "string") {
+      response.setHeader("Access-Control-Allow-Origin", corsAllowedOrigins.length === 0 ? "*" : "null");
+      response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+      response.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+      return true;
+    }
+
+    if (corsAllowedOrigins.length === 0 || corsAllowedOrigins.includes(origin)) {
+      response.setHeader("Access-Control-Allow-Origin", corsAllowedOrigins.length === 0 ? "*" : origin);
+      response.setHeader("Vary", "Origin");
+      response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+      response.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+      return true;
+    }
+
+    writeJson(response, 403, { error: "Origin is not allowed." });
+    return false;
+  }
 
   function listJoinableRooms(
     options: { readonly sort?: "recent" | "players"; readonly hasSeatOnly?: boolean } = {}
@@ -318,7 +394,7 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
   function createInviteCode(): string {
     while (true) {
       const code = Array.from({ length: INVITE_CODE_LENGTH }, () => {
-        const index = Math.floor(Math.random() * INVITE_CODE_ALPHABET.length);
+        const index = randomInt(0, INVITE_CODE_ALPHABET.length);
         return INVITE_CODE_ALPHABET[index];
       }).join("");
 
@@ -413,11 +489,11 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
   }
 
   const server = createServer(async (request, response) => {
-    response.setHeader("Access-Control-Allow-Origin", "*");
-    response.setHeader("Access-Control-Allow-Headers", "Content-Type");
-    response.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-
     try {
+      if (!applyCors(request, response)) {
+        return;
+      }
+
       if (request.method === "OPTIONS") {
         response.statusCode = 204;
         response.end();
@@ -437,6 +513,10 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
       }
 
       if (request.method === "POST" && url.pathname === "/api/rooms") {
+        if (!(await enforceRateLimit(request, response, "room.create"))) {
+          return;
+        }
+
         const body = await readJson<CreateRoomRequest>(request);
 
         if (!body.name || !body.playerCount || body.playerCount < 2 || body.playerCount > 4) {
@@ -479,6 +559,10 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
       }
 
       if (request.method === "GET" && /^\/api\/invite\/[^/]+$/.test(url.pathname)) {
+        if (!(await enforceRateLimit(request, response, "invite.lookup"))) {
+          return;
+        }
+
         const inviteCode = url.pathname.split("/")[3];
 
         if (!inviteCode) {
@@ -509,6 +593,10 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
       }
 
     if (request.method === "POST" && /^\/api\/invite\/[^/]+\/join$/.test(url.pathname)) {
+      if (!(await enforceRateLimit(request, response, "room.join"))) {
+        return;
+      }
+
       const inviteCode = url.pathname.split("/")[3];
 
       if (!inviteCode) {
@@ -556,6 +644,10 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
     }
 
     if (request.method === "POST" && /^\/api\/rooms\/[^/]+\/join$/.test(url.pathname)) {
+      if (!(await enforceRateLimit(request, response, "room.join"))) {
+        return;
+      }
+
       const roomId = url.pathname.split("/")[3];
 
       if (!roomId) {
@@ -686,6 +778,10 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
     }
 
     if (request.method === "POST" && /^\/api\/rooms\/[^/]+\/actions\/query$/.test(url.pathname)) {
+      if (!(await enforceRateLimit(request, response, "action.query"))) {
+        return;
+      }
+
       const roomId = url.pathname.split("/")[3];
 
       if (!roomId) {
@@ -724,6 +820,10 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
     }
 
       if (request.method === "POST" && /^\/api\/rooms\/[^/]+\/commands$/.test(url.pathname)) {
+        if (!(await enforceRateLimit(request, response, "command"))) {
+          return;
+        }
+
         const roomId = url.pathname.split("/")[3];
 
       if (!roomId) {
@@ -847,7 +947,18 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
   });
 
   server.on("upgrade", (request, socket, head) => {
+    void (async () => {
     if (!request.url) {
+      socket.destroy();
+      return;
+    }
+
+    const rateLimit = await rateLimiters["ws.upgrade"].check({
+      scope: "ws.upgrade",
+      identity: resolveRequestIdentity(request)
+    });
+
+    if (!rateLimit.allowed) {
       socket.destroy();
       return;
     }
@@ -880,6 +991,9 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
         roomId,
         playerId: playerSession.playerId
       });
+    });
+    })().catch(() => {
+      socket.destroy();
     });
   });
 
@@ -947,7 +1061,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     ...(redisClient
       ? { runtimeStore: createRedisRuntimeStore({ client: redisClient }) }
       : {}),
-    sessionTokenSecret: config.sessionTokenSecret
+    sessionTokenSecret: config.sessionTokenSecret,
+    corsAllowedOrigins: config.corsAllowedOrigins
   });
   console.log(`Project.BH server listening on http://${server.host}:${server.port}`);
 }
