@@ -76,6 +76,21 @@ label {
   grid-template-rows: auto auto auto auto minmax(0, 1fr);
 }
 
+.app-shell[data-screen="match"] .top-strip {
+  min-height: 1.75rem;
+  padding: 0.08rem 0.34rem;
+  border-radius: 16px;
+}
+
+.app-shell[data-screen="match"] .title-row {
+  font-size: 0.78rem;
+}
+
+.app-shell[data-screen="match"] .compact-actions button {
+  min-height: 1.8rem;
+  padding: 0.28rem 0.58rem;
+}
+
 .app-shell[data-screen="match"][data-has-turn-order-bridge="false"] {
   grid-template-rows: auto auto auto minmax(0, 1fr);
 }
@@ -339,7 +354,7 @@ label {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   gap: 0.1rem;
-  padding: 0.08rem 0.1rem;
+  padding: 0.04rem 0.08rem;
 }
 
 .score-card {
@@ -355,7 +370,7 @@ label {
   align-items: center;
   gap: 0.22rem;
   min-height: 0;
-  padding-inline: 0.34rem;
+  padding: 0.1rem 0.34rem;
 }
 
 .score-card-header,
@@ -639,13 +654,34 @@ label {
   position: relative;
   isolation: isolate;
   display: grid;
-  gap: 0;
+  gap: 0.16rem;
   justify-items: center;
-  padding: 6.4rem 0.2rem 0.18rem;
+  padding: 0.18rem 0.2rem 0.12rem;
   min-height: 0;
   height: 100%;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   align-content: stretch;
+}
+
+.board-hud {
+  position: relative;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(18rem, 1fr);
+  align-items: stretch;
+  gap: 0.22rem;
+  width: 100%;
+  min-height: 0;
+}
+
+.board-canvas {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: visible;
 }
 
 .action-status-strip {
@@ -694,43 +730,35 @@ label {
 }
 
 .board-header {
-  position: absolute;
-  top: 0.18rem;
-  left: 0.22rem;
-  right: 0.22rem;
-  z-index: 30;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.2rem;
+  gap: 0.28rem;
   flex-wrap: wrap;
-  font-size: 0.64rem;
-  pointer-events: none;
-}
-
-.board-header > * {
-  pointer-events: auto;
+  min-width: 0;
+  min-height: 2.25rem;
+  padding: 0.18rem 0.34rem;
+  border-radius: 14px;
+  font-size: 0.78rem;
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(16, 63, 54, 0.08);
 }
 
 .board-phase-callout-wrap {
-  position: absolute;
-  top: 2rem;
-  left: 0.5rem;
-  z-index: 29;
-  width: calc(100% - 1rem);
+  min-width: 0;
   display: flex;
-  justify-content: flex-start;
-  pointer-events: none;
+  justify-content: stretch;
 }
 
 .phase-callout {
-  width: min(25rem, 100%);
+  width: 100%;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.8rem;
+  gap: 0.56rem;
   align-items: center;
-  padding: 0.9rem 1rem;
-  border-radius: 18px;
+  min-height: 2.25rem;
+  padding: 0.22rem 0.56rem;
+  border-radius: 14px;
   color: #fffaf0;
   background:
     linear-gradient(135deg, rgba(15, 43, 38, 0.92), rgba(47, 98, 87, 0.88));
@@ -743,14 +771,12 @@ label {
 }
 
 .phase-callout-treasure {
-  width: min(calc(var(--tile-width, 28px) * 7), calc(100% - 0.2rem));
   background:
     radial-gradient(circle at top left, rgba(255, 208, 82, 0.24), transparent 36%),
     linear-gradient(135deg, rgba(64, 45, 12, 0.94), rgba(122, 83, 19, 0.9));
 }
 
 .phase-callout-priority {
-  width: min(calc(var(--tile-width, 28px) * 7), calc(100% - 0.2rem));
   background:
     radial-gradient(circle at top left, rgba(255, 255, 255, 0.18), transparent 36%),
     linear-gradient(135deg, rgba(33, 43, 77, 0.94), rgba(67, 86, 145, 0.9));
@@ -765,15 +791,15 @@ label {
 .phase-callout-kicker {
   display: inline-grid;
   place-items: center;
-  min-width: 7.2rem;
-  min-height: 3.5rem;
-  padding: 0.4rem 0.7rem;
-  border-radius: 14px;
+  min-width: 6.4rem;
+  min-height: 1.5rem;
+  padding: 0.22rem 0.5rem;
+  border-radius: 10px;
   background: rgba(255, 248, 237, 0.12);
   border: 1px solid rgba(255, 248, 237, 0.14);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 800;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -788,14 +814,14 @@ label {
 }
 
 .phase-callout-copy strong {
-  font-size: 1.08rem;
+  font-size: 0.92rem;
   line-height: 1.1;
 }
 
 .phase-callout-copy p {
   color: rgba(255, 250, 240, 0.84);
-  font-size: 0.84rem;
-  line-height: 1.35;
+  font-size: 0.78rem;
+  line-height: 1.25;
 }
 
 .phase-callout-ephemeral {
@@ -1349,9 +1375,9 @@ label {
   gap: 0.22rem;
   position: relative;
   min-height: 0;
-  height: clamp(4.2rem, 7vw, 5.4rem);
-  padding: 0.28rem 0.22rem 0.2rem;
-  border-radius: 16px;
+  height: clamp(2.15rem, 3.3vw, 3.6rem);
+  padding: 0.18rem 0.18rem 0.14rem;
+  border-radius: 12px;
   overflow: hidden;
   --slot-accent: rgba(16, 63, 54, 0.12);
   --slot-deep: #103f36;
@@ -1360,30 +1386,30 @@ label {
 
 .treasure-slot-chip {
   position: absolute;
-  top: 0.16rem;
+  top: 0.1rem;
   left: 50%;
   transform: translateX(-50%);
   justify-self: center;
   min-height: 0.9rem;
-  padding: 0.08rem 0.34rem;
-  font-size: 0.62rem;
+  padding: 0.04rem 0.3rem;
+  font-size: 0.68rem;
 }
 
 .treasure-slot-strip .treasure-slot-figure {
   display: grid;
   place-items: center;
   min-height: 0;
-  height: calc(100% - 1.02rem);
-  margin-top: 0.92rem;
+  height: calc(100% - 0.76rem);
+  margin-top: 0.68rem;
   overflow: hidden;
 }
 
 .treasure-slot-strip .treasure-slot-icon {
   display: block;
-  width: min(96%, 8.4rem);
+  width: min(86%, 4.6rem);
   height: auto;
   max-width: 100%;
-  max-height: 2.75rem;
+  max-height: 1.8rem;
   object-fit: contain;
   justify-self: center;
   align-self: center;
@@ -1757,7 +1783,7 @@ label {
   gap: 0.12rem;
   align-items: stretch;
   min-height: 0;
-  grid-template-rows: minmax(0, 1fr) minmax(8.4rem, auto);
+  grid-template-rows: minmax(0, 1fr) minmax(6.2rem, auto);
 }
 
 .match-main {
@@ -1782,23 +1808,23 @@ label {
 .treasure-slot-strip {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 0.1rem;
-  padding: 0.22rem;
-  border-radius: 20px;
+  gap: 0.08rem;
+  padding: 0.12rem;
+  border-radius: 16px;
   border: 1px solid rgba(16, 63, 54, 0.12);
   background: rgba(255, 255, 255, 0.62);
   box-shadow: 0 10px 24px rgba(16, 35, 35, 0.08);
 }
 
 .inventory-section {
-  --footer-card-width: 4.3rem;
-  --footer-card-height: 5.2rem;
+  --footer-card-width: 4rem;
+  --footer-card-height: 4.8rem;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-template-areas: "priority treasure special";
   justify-content: stretch;
   align-items: stretch;
   gap: 0.12rem;
-  min-height: 8.4rem;
+  min-height: 6.2rem;
 }
 
 .inventory-group {
@@ -1823,7 +1849,7 @@ label {
 }
 
 .inventory-section h3 {
-  font-size: 0.64rem;
+  font-size: 0.75rem;
   letter-spacing: 0.02em;
   padding-inline: 0.08rem;
   margin: 0;
@@ -1840,6 +1866,37 @@ label {
 
 .inventory-group-special {
   grid-area: special;
+}
+
+.app-shell[data-round-phase="treasurePlacement"] .inventory-section {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "treasure";
+  min-height: 5.6rem;
+}
+
+.app-shell[data-round-phase="treasurePlacement"] .inventory-group-priority,
+.app-shell[data-round-phase="treasurePlacement"] .inventory-group-special {
+  display: none;
+}
+
+.app-shell[data-round-phase="prioritySubmission"] .inventory-section {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "priority";
+  min-height: 5.6rem;
+}
+
+.app-shell[data-round-phase="prioritySubmission"] .inventory-group-treasure,
+.app-shell[data-round-phase="prioritySubmission"] .inventory-group-special {
+  display: none;
+}
+
+.app-shell[data-round-phase="inTurn"] .inventory-section {
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
+  grid-template-areas: "priority special";
+}
+
+.app-shell[data-round-phase="inTurn"] .inventory-group-treasure {
+  display: none;
 }
 
 .inventory-group-priority .priority-card-rack {

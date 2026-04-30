@@ -222,7 +222,25 @@ async function closeChrome(handle: ChromeHandle | null): Promise<void> {
     handle.process.kill("SIGTERM");
   }
 
-  await rm(handle.userDataDir, { recursive: true, force: true });
+  await Promise.race([
+    new Promise<void>((resolve) => {
+      handle.process.once("exit", () => resolve());
+    }),
+    delay(2_000)
+  ]);
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await rm(handle.userDataDir, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (attempt === 4) {
+        throw error;
+      }
+
+      await delay(200);
+    }
+  }
 }
 
 class CdpPage {
@@ -366,7 +384,8 @@ class CdpPage {
         }
 
         element.focus();
-        element.value = ${JSON.stringify(value)};
+        const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+        valueSetter?.call(element, ${JSON.stringify(value)});
         element.dispatchEvent(new Event("input", { bubbles: true }));
         element.dispatchEvent(new Event("change", { bubbles: true }));
         return true;
@@ -377,37 +396,27 @@ class CdpPage {
   }
 
   async rightClickSelector(selector: string): Promise<void> {
-    const position = await this.evaluate<{ readonly x: number; readonly y: number } | null>(`
+    const dispatched = await this.evaluate<boolean>(`
       (() => {
         const element = document.querySelector(${JSON.stringify(selector)});
         if (!(element instanceof HTMLElement)) {
-          return null;
+          return false;
         }
 
         const rect = element.getBoundingClientRect();
-        return {
-          x: rect.left + rect.width / 2,
-          y: rect.top + rect.height / 2
-        };
+        element.dispatchEvent(new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          button: 2,
+          buttons: 2,
+          clientX: rect.left + rect.width / 2,
+          clientY: rect.top + rect.height / 2
+        }));
+        return true;
       })()
     `);
 
-    assert.ok(position, `Expected ${selector} to exist for right click.`);
-
-    await this.send("Input.dispatchMouseEvent", {
-      type: "mousePressed",
-      x: position.x,
-      y: position.y,
-      button: "right",
-      clickCount: 1
-    });
-    await this.send("Input.dispatchMouseEvent", {
-      type: "mouseReleased",
-      x: position.x,
-      y: position.y,
-      button: "right",
-      clickCount: 1
-    });
+    assert.equal(dispatched, true, `Expected ${selector} to exist for right click.`);
   }
 
   async textContent(selector: string): Promise<string> {
@@ -424,11 +433,155 @@ class CdpPage {
 
     return text;
   }
+
+  async setViewport(width: number, height: number): Promise<void> {
+    await this.send("Emulation.setDeviceMetricsOverride", {
+      width,
+      height,
+      deviceScaleFactor: 1,
+      mobile: false
+    });
+  }
+}
+
+interface MatchLayoutMetrics {
+  readonly viewportArea: number;
+  readonly boardArea: number;
+  readonly boardRatio: number;
+  readonly boardStageRatio: number;
+  readonly topHudHeight: number;
+  readonly topChromeHeight: number;
+  readonly boardIntersectsCallout: boolean;
+  readonly minimumPlayerTextSize: number;
+}
+
+async function readMatchLayoutMetrics(page: CdpPage): Promise<MatchLayoutMetrics> {
+  return await page.evaluate<MatchLayoutMetrics>(`
+    (() => {
+      const rect = (selector) => {
+        const element = document.querySelector(selector);
+
+        if (!element) {
+          return null;
+        }
+
+        const bounds = element.getBoundingClientRect();
+        return {
+          left: bounds.left,
+          top: bounds.top,
+          right: bounds.right,
+          bottom: bounds.bottom,
+          width: bounds.width,
+          height: bounds.height
+        };
+      };
+      const intersects = (a, b) => Boolean(a && b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top);
+      const fontSize = (selector) => {
+        const element = document.querySelector(selector);
+        return element ? Number.parseFloat(getComputedStyle(element).fontSize) : 999;
+      };
+      const board = rect('.board');
+      const stage = rect('.board-canvas');
+      const callout = rect('.phase-callout');
+      const topStrip = rect('.top-strip');
+      const score = rect('.scoreboard-strip');
+      const treasure = rect('.treasure-slot-strip');
+      const topHudHeight = [topStrip, score].reduce((total, item) => total + (item?.height ?? 0), 0);
+      const topChromeHeight = [topStrip, score, treasure].reduce((total, item) => total + (item?.height ?? 0), 0);
+      const viewportArea = window.innerWidth * window.innerHeight;
+      const boardArea = (board?.width ?? 0) * (board?.height ?? 0);
+      const stageArea = (stage?.width ?? 0) * (stage?.height ?? 0);
+
+      return {
+        viewportArea,
+        boardArea,
+        boardRatio: boardArea / viewportArea,
+        boardStageRatio: stageArea > 0 ? boardArea / stageArea : 0,
+        topHudHeight,
+        topChromeHeight,
+        boardIntersectsCallout: intersects(board, callout),
+        minimumPlayerTextSize: Math.min(
+          fontSize('.board-meta'),
+          fontSize('.inventory-section h3'),
+          fontSize('.stat-pill-value')
+        )
+      };
+    })()
+  `);
+}
+
+function assertMatchLayoutSupportsSmallDesktop(metrics: MatchLayoutMetrics): void {
+  assert.ok(
+    metrics.boardRatio >= 0.32,
+    `expected board to occupy at least 32% of 1280x720 viewport, got ${(metrics.boardRatio * 100).toFixed(1)}%`
+  );
+  assert.ok(
+    metrics.boardStageRatio >= 0.5,
+    `expected board to use at least 50% of its canvas, got ${(metrics.boardStageRatio * 100).toFixed(1)}%`
+  );
+  assert.ok(
+    metrics.topHudHeight <= 96,
+    `expected top HUD to stay at or below 96px, got ${metrics.topHudHeight.toFixed(0)}px`
+  );
+  assert.ok(
+    metrics.topChromeHeight <= 140,
+    `expected total top chrome to stay at or below 140px, got ${metrics.topChromeHeight.toFixed(0)}px`
+  );
+  assert.equal(metrics.boardIntersectsCallout, false, "phase guidance must not overlap the board");
+  assert.ok(
+    metrics.minimumPlayerTextSize >= 12,
+    `expected player-facing compact text to be at least 12px, got ${metrics.minimumPlayerTextSize.toFixed(2)}px`
+  );
+}
+
+async function submitCurrentAuctionBid(page: CdpPage): Promise<void> {
+  const submitted = await page.evaluate<boolean>(`
+    (async () => {
+      const activeSession = JSON.parse(sessionStorage.getItem('project-bh.active-session') ?? 'null');
+
+      if (!activeSession) {
+        return false;
+      }
+
+      const roomResponse = await fetch('/api/rooms/' + activeSession.roomId + '?sessionToken=' + encodeURIComponent(activeSession.sessionToken));
+
+      if (!roomResponse.ok) {
+        return false;
+      }
+
+      const envelope = await roomResponse.json();
+      const offer = envelope.snapshot?.state?.round?.auction?.currentOffer;
+
+      if (!offer || !envelope.snapshot?.state?.matchId) {
+        return false;
+      }
+
+      const commandResponse = await fetch('/api/rooms/' + activeSession.roomId + '/commands', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          version: 1,
+          matchId: envelope.snapshot.state.matchId,
+          sessionToken: activeSession.sessionToken,
+          type: 'match.submitAuctionBids',
+          bids: [{ offerSlot: offer.slot, amount: 0 }]
+        })
+      });
+
+      return commandResponse.ok;
+    })()
+  `);
+
+  assert.equal(submitted, true, "Expected current auction bid to submit through the browser session.");
 }
 
 async function placeTreasure(page: CdpPage, treasureId: string, cell: string): Promise<void> {
   await page.clickSelector(`[data-treasure-id="${treasureId}"]`);
-  await page.rightClickSelector(`[data-cell="${cell}"]`);
+  await page.waitForExpression(
+    `document.querySelector('[data-treasure-id="${treasureId}"]')?.classList.contains('is-selected') === true`,
+    `treasure ${treasureId} selected`
+  );
+  await page.rightClickSelector(`button[data-cell="${cell}"]`);
   await page.waitForExpression(
     `Boolean(document.querySelector('[data-testid="context-menu"] [data-action-id="place-treasure"]'))`,
     `treasure placement menu for ${cell}`
@@ -496,6 +649,7 @@ test(
       }
 
       hostPage = await CdpPage.connect(hostChrome.debugPort, baseUrl);
+      await hostPage.setViewport(1280, 720);
       await hostPage.waitForExpression(
         `document.querySelector('[data-screen="landing"]') !== null`,
         "host landing screen"
@@ -512,6 +666,7 @@ test(
 
       guestChrome = await launchChrome(`${baseUrl}/?invite=${inviteCode}`);
       guestPage = await CdpPage.connect(guestChrome.debugPort, `${baseUrl}/?invite=${inviteCode}`);
+      await guestPage.setViewport(1280, 720);
       await guestPage.waitForExpression(
         `document.querySelector('[data-screen="landing"]') !== null`,
         "guest landing screen"
@@ -547,6 +702,8 @@ test(
         20_000
       );
 
+      assertMatchLayoutSupportsSmallDesktop(await readMatchLayoutMetrics(hostPage));
+
       const hostTreasureIds = await hostPage.evaluate<readonly string[]>(`
         [...document.querySelectorAll('[data-testid="treasure-card-button"]')].map((element) =>
           element instanceof HTMLButtonElement && !element.disabled
@@ -566,11 +723,11 @@ test(
       assert.ok(guestTreasureIds.length >= 1);
 
       for (const [index, treasureId] of hostTreasureIds.entries()) {
-        await placeTreasure(hostPage, treasureId, `${5 + index},5`);
+        await placeTreasure(hostPage, treasureId, `${7 + index},7`);
       }
 
       for (const [index, treasureId] of guestTreasureIds.entries()) {
-        await placeTreasure(guestPage, treasureId, `${7 + index},5`);
+        await placeTreasure(guestPage, treasureId, `${9 + index},7`);
       }
 
       await hostPage.waitForExpression(
@@ -587,22 +744,23 @@ test(
       const revealedOffers: string[] = [];
 
       for (let index = 0; index < 4; index += 1) {
-        const currentOffer = await hostPage.textContent('[data-testid="auction-current-offer"]');
+        const currentOffer = await hostPage.textContent('.auction-showcase-card strong');
+        const currentRound = await hostPage.textContent('[data-testid="auction-round-pill"]');
         revealedOffers.push(currentOffer);
 
-        await hostPage.clickSelector('[data-testid="auction-submit-button"]');
-        await guestPage.clickSelector('[data-testid="auction-submit-button"]');
+        await submitCurrentAuctionBid(hostPage);
+        await submitCurrentAuctionBid(guestPage);
 
         if (index < 3) {
           await hostPage.waitForExpression(
-            `document.querySelector('[data-testid="auction-current-offer"]')?.textContent?.trim() !== ${JSON.stringify(currentOffer)}`,
+            `document.querySelector('[data-testid="auction-round-pill"]')?.textContent?.trim() !== ${JSON.stringify(currentRound)}`,
             `auction reveal ${index + 2}`,
             20_000
           );
         }
       }
 
-      assert.deepEqual(revealedOffers, ["coldBomb", "flameBomb", "electricBomb", "largeHammer"]);
+      assert.deepEqual(revealedOffers, ["냉기 폭탄", "화염 폭탄", "전기 폭탄", "대형 망치"]);
 
       await hostPage.waitForExpression(
         `document.querySelector('[data-testid="round-phase"]')?.textContent?.includes('prioritySubmission') === true`,
@@ -625,14 +783,14 @@ test(
         20_000
       );
 
-      await hostPage.rightClickSelector('[data-cell="1,0"]');
+      await hostPage.rightClickSelector('button[data-cell="1,0"]');
       await hostPage.waitForExpression(
         `Boolean(document.querySelector('[data-testid="context-menu"] [data-action-id="move-player"]'))`,
         "move action in context menu"
       );
       await hostPage.clickSelector('[data-testid="context-menu"] [data-action-id="move-player"]');
       await hostPage.waitForExpression(
-        `document.querySelector('[data-testid="turn-stage"]')?.textContent?.includes('+2 선택') === true`,
+        `document.querySelector('[data-testid="turn-stage"]')?.textContent?.includes('행동 선택') === true`,
         "secondary action stage after move",
         20_000
       );

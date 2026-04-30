@@ -1422,7 +1422,7 @@ export function App() {
   const [hoveredRotationOrigin, setHoveredRotationOrigin] = useState<{ x: number; y: number } | null>(null);
   const [boardViewportSize, setBoardViewportSize] = useState<number | null>(null);
   const [showTurnAnnouncement, setShowTurnAnnouncement] = useState(false);
-  const boardStageRef = useRef<HTMLElement | null>(null);
+  const boardStageRef = useRef<HTMLDivElement | null>(null);
   const lastTurnAnnouncementKeyRef = useRef<string | null>(null);
 
   const me = snapshot?.viewer.self ?? null;
@@ -1469,7 +1469,7 @@ export function App() {
         const availableHeight = Math.max(240, stageRect.height - paddingY);
         const nextSize = Math.max(
           18,
-          Math.floor(
+          Math.round(
             Math.min(
               availableWidth / BOARD_COLUMNS,
               availableHeight / (BOARD_ROWS * QUARTER_TILE_HEIGHT_RATIO + 0.95)
@@ -2243,6 +2243,7 @@ export function App() {
     <main
       className="app-shell"
       data-screen="match"
+      data-round-phase={snapshot?.state.round.phase ?? "none"}
       data-has-turn-order-bridge={
         snapshot &&
         (snapshot.state.round.turnOrder.length > 0 ||
@@ -2283,7 +2284,6 @@ export function App() {
       {snapshot ? (
         <div className="match-layout">
           <section
-            ref={boardStageRef}
             className="board-stage match-main"
             style={
               boardViewportSize
@@ -2294,62 +2294,66 @@ export function App() {
                 : undefined
             }
           >
-          <div className="board-header">
-            <div className="board-meta">
-              <span>Goal {snapshot.state.settings.roundOpenTreasureTarget}</span>
-              <span>
-                Zone {snapshot.state.settings.treasurePlacementZone.width}x
-                {snapshot.state.settings.treasurePlacementZone.height}
-              </span>
-              <span>Active {getSnapshotPlayerName(snapshot, snapshot.state.round.activePlayerId)}</span>
-            </div>
-            <div className="inline-controls">
-              {snapshot.state.round.phase === "inTurn" && isMyTurn ? (
-                <button
-                  data-testid="end-turn-button"
-                  disabled={!snapshot.viewer.turnHints.availableSecondaryActions.endTurn}
-                  onClick={() => void sendCommand({ type: "match.endTurn" })}
-                >
-                  턴 종료
-                </button>
-              ) : null}
-              {snapshot.state.round.phase === "completed" ? (
-                <button data-testid="prepare-next-round-button" onClick={() => void sendCommand({ type: "match.prepareNextRound" })}>
-                  다음 라운드
-                </button>
-              ) : null}
-            </div>
-          </div>
+            <div className="board-hud">
+              <div className="board-header">
+                <div className="board-meta">
+                  <span>목표 {snapshot.state.settings.roundOpenTreasureTarget}</span>
+                  <span>
+                    보물 구역 {snapshot.state.settings.treasurePlacementZone.width}x
+                    {snapshot.state.settings.treasurePlacementZone.height}
+                  </span>
+                  <span>활성 {getSnapshotPlayerName(snapshot, snapshot.state.round.activePlayerId)}</span>
+                </div>
+                <div className="inline-controls">
+                  {snapshot.state.round.phase === "inTurn" && isMyTurn ? (
+                    <button
+                      data-testid="end-turn-button"
+                      disabled={!snapshot.viewer.turnHints.availableSecondaryActions.endTurn}
+                      onClick={() => void sendCommand({ type: "match.endTurn" })}
+                    >
+                      턴 종료
+                    </button>
+                  ) : null}
+                  {snapshot.state.round.phase === "completed" ? (
+                    <button data-testid="prepare-next-round-button" onClick={() => void sendCommand({ type: "match.prepareNextRound" })}>
+                      다음 라운드
+                    </button>
+                  ) : null}
+                </div>
+              </div>
 
-          <div className="board-phase-callout-wrap">
-            <MatchPhaseCallout
-              snapshot={snapshot}
-              pendingAction={pendingAction}
-              visibleTurnAnnouncement={showTurnAnnouncement}
-            />
-          </div>
+              <div className="board-phase-callout-wrap">
+                <MatchPhaseCallout
+                  snapshot={snapshot}
+                  pendingAction={pendingAction}
+                  visibleTurnAnnouncement={showTurnAnnouncement}
+                />
+              </div>
+            </div>
 
-          <BoardView
-            snapshot={snapshot}
-            playerId={playerId}
-            tileWidth={boardViewportSize ?? 28}
-            highlightedCells={highlightedCells}
-            highlightTone={snapshot.viewer.turnHints.stage}
-            rotationMode={interactionMode === "rotate"}
-            rotationOrigins={rotationOrigins}
-            selectedRotationOrigin={selectedRotationOrigin}
-            hoveredRotationOrigin={hoveredRotationOrigin}
-            rotationPreviewCells={rotationPreviewCells}
-            onRotationCellSelect={(event, cell) => {
-              const rect = event.currentTarget.getBoundingClientRect();
-              void openRotationActions(cell, rect.left + rect.width / 2, rect.top + rect.height / 2);
-            }}
-            onRotationCellHover={setHoveredRotationOrigin}
-            onCellContextMenu={(event, cell) => {
-              event.preventDefault();
-              void queryActions(event.clientX, event.clientY, cell);
-            }}
-          />
+            <div ref={boardStageRef} className="board-canvas">
+              <BoardView
+                snapshot={snapshot}
+                playerId={playerId}
+                tileWidth={boardViewportSize ?? 28}
+                highlightedCells={highlightedCells}
+                highlightTone={snapshot.viewer.turnHints.stage}
+                rotationMode={interactionMode === "rotate"}
+                rotationOrigins={rotationOrigins}
+                selectedRotationOrigin={selectedRotationOrigin}
+                hoveredRotationOrigin={hoveredRotationOrigin}
+                rotationPreviewCells={rotationPreviewCells}
+                onRotationCellSelect={(event, cell) => {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  void openRotationActions(cell, rect.left + rect.width / 2, rect.top + rect.height / 2);
+                }}
+                onRotationCellHover={setHoveredRotationOrigin}
+                onCellContextMenu={(event, cell) => {
+                  event.preventDefault();
+                  void queryActions(event.clientX, event.clientY, cell);
+                }}
+              />
+            </div>
 
           {snapshot.state.round.phase === "auction" ? (
             <AuctionOverlay
