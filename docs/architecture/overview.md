@@ -34,6 +34,7 @@ The repository is intentionally arranged so the rules engine remains portable to
 - Application orchestrates use cases and is the first anti-corruption layer above domain.
 - Protocol owns validation of external payloads before application logic runs.
 - Server and web are shells around shared rules and contracts.
+- Complex action after-effects are modeled as explicit domain `ResolutionStep` sequences. This keeps future skills from embedding damage, tile effects, treasure drops, and turn interruption directly inside React, transport handlers, or one large special-card branch.
 
 ## Current implemented slices
 
@@ -50,6 +51,7 @@ The current baseline now covers:
 - treasure opening at the start tile
 - throwable fire, water, and electric tiles
 - basic fire, water, electric, ice, giant-flame, and river state transitions
+- domain-level resolution pipeline for reusable action after-effects such as damage, tile effects, elimination, carried-treasure drops, and bomb impact sequencing
 - fence placement and fence-aware movement/rotation constraints
 - charged special-card inventory, fence auction purchases, and special-card use for bombs, hammers, recovery, jump, hook, and fences
 - 2x2, cross-5, and rectangle-6 rotation transforms

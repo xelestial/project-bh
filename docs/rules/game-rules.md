@@ -76,6 +76,13 @@ The current codebase implements the following rule-backed behavior.
 - Electric deals `3` damage.
 - Electric applied to a wet player also schedules a skipped next turn.
 - Ice currently triggers carried-treasure drop resolution with a deterministic fallback direction when no explicit player choice is modeled.
+- Action after-effects that can chain across damage, status, tile effects, elimination, and treasure drops resolve through an explicit domain resolution pipeline.
+- Current resolution order for bomb impact is:
+  - consume the special-card charge
+  - remove a fence on the target tile when present
+  - mutate and normalize the target tile
+  - apply the resulting tile effect to players on that tile
+  - advance the turn or process skipped turns using the existing turn advancement rules
 - Rotation currently supports:
   - `square2`
   - `cross5`

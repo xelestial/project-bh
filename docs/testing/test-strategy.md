@@ -21,6 +21,7 @@ Current coverage includes:
 - treasure opening and round completion
 - tile throwing and board mutation
 - electric stun/damage behavior
+- resolution pipeline coverage for damage, electric wet stun, elimination, carried-treasure drop, and bomb impact sequencing
 - giant-flame normalization
 - square2 rotation with treasure movement
 - special-card board mutation and fence removal
@@ -39,6 +40,7 @@ Current coverage includes:
 ## Regression policy
 
 - Every future rules bug should add a focused domain regression test first.
+- New complex skills should add a resolution-plan test that asserts the ordered `ResolutionStep` sequence before or with command-level behavior tests.
 - Ambiguous game behavior should be captured as a fixture or scenario test before UI work relies on it.
 - Unity parity should reuse the same scenario names and expected outcomes.
 

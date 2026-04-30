@@ -35,3 +35,4 @@ The first parity targets should be:
 - server rejection catalogs
 - player-private treasure projection samples for Unity client parity checks
 - secure reconnect/session-token samples so Unity can match the same transport-auth contract without trusting public player ids
+- resolution-step fixtures for complex skills so Unity can verify damage, push, collision, tile effects, treasure drops, and turn interruption in the same order as the TypeScript reference

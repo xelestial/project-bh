@@ -1,5 +1,4 @@
 import {
-  findFenceAtPosition,
   getTileKind,
   isFenceBlockingPosition,
   normalizeBoardAfterMutation,
@@ -38,29 +37,24 @@ import {
   type MatchSettings
 } from "./model.ts";
 import { resolvePriorityTurnOrder } from "./priority.ts";
+import { runResolutionPipeline } from "./resolution.ts";
 import {
   getRotationPositionMapping,
   getRotationSelectionPositions,
   isValidRotationSelection
 } from "./rotation.ts";
+import { createBombResolutionPlan } from "./special-card-resolution.ts";
 import {
   areOrthogonallyAdjacent,
   cardinalLineDistance,
   cardinalDirectionBetween,
   isSamePosition,
   isWithinBoard,
-  manhattanDistance,
   movePosition,
   positionKey
 } from "./position.ts";
 
 const THROWABLE_TILE_KINDS: readonly TileKind[] = ["fire", "water", "electric"];
-const DROP_DIRECTION_PRIORITY: readonly Direction[] = [
-  "north",
-  "east",
-  "south",
-  "west"
-];
 
 export interface DomainMutationResult {
   readonly state: MatchState;
@@ -579,250 +573,30 @@ function validateFencePlacement(
   return true;
 }
 
-function chooseTreasureDropPosition(player: PlayerState): Position {
-  return DROP_DIRECTION_PRIORITY.map((direction) => movePosition(player.position, direction))
-    .filter(isWithinBoard)
-    .sort((left, right) => {
-      return (
-        manhattanDistance(right, player.startPosition) -
-        manhattanDistance(left, player.startPosition)
-      );
-    })[0] ?? player.position;
-}
-
-function dropCarriedTreasure(
-  match: MatchState,
-  player: PlayerState,
-  position: Position
-): DomainMutationResult {
-  if (player.carriedTreasureId === null) {
-    return {
-      state: match,
-      events: []
-    };
-  }
-
-  const treasure = match.treasures[player.carriedTreasureId];
-
-  if (!treasure) {
-    throw new DomainError("TREASURE_NOT_FOUND", "Unknown treasure.");
-  }
-
-  let nextMatch = updatePlayer(match, {
-    ...player,
-    carriedTreasureId: null
-  });
-  const events: DomainEvent[] = [];
-  const occupyingPlayer = Object.values(nextMatch.players).find((candidate) => {
-    return !candidate.eliminated && candidate.id !== player.id && isSamePosition(candidate.position, position);
-  });
-
-  if (occupyingPlayer) {
-    nextMatch = updatePlayer(nextMatch, {
-      ...occupyingPlayer,
-      carriedTreasureId: treasure.id
-    });
-    nextMatch = updateTreasure(nextMatch, {
-      ...treasure,
-      position: null,
-      carriedByPlayerId: occupyingPlayer.id
-    });
-    events.push({
-      type: "treasureDropped",
-      playerId: player.id,
-      treasureId: treasure.id,
-      position
-    });
-    events.push({
-      type: "treasurePickedUp",
-      playerId: occupyingPlayer.id,
-      treasureId: treasure.id,
-      position
-    });
-  } else {
-    nextMatch = updateTreasure(nextMatch, {
-      ...treasure,
-      position,
-      carriedByPlayerId: null
-    });
-    events.push({
-      type: "treasureDropped",
-      playerId: player.id,
-      treasureId: treasure.id,
-      position
-    });
-  }
-
-  return {
-    state: nextMatch,
-    events
-  };
-}
-
-function applyDamage(
-  match: MatchState,
-  playerId: PlayerId,
-  amount: number
-): DomainMutationResult {
-  const player = getPlayerOrThrow(match, playerId);
-  const nextHitPoints = Math.max(0, player.hitPoints - amount);
-  let nextPlayer: PlayerState = {
-    ...player,
-    hitPoints: nextHitPoints
-  };
-  let nextMatch = updatePlayer(match, nextPlayer);
-  const events: DomainEvent[] = [
-    {
-      type: "playerDamaged",
-      playerId,
-      amount,
-      remainingHitPoints: nextHitPoints
-    }
-  ];
-
-  if (nextHitPoints === 0 && !player.eliminated) {
-    nextPlayer = {
-      ...nextPlayer,
-      eliminated: true
-    };
-    nextMatch = updatePlayer(nextMatch, nextPlayer);
-    events.push({
-      type: "playerEliminated",
-      playerId,
-      position: player.position
-    });
-
-    const dropped = dropCarriedTreasure(nextMatch, nextPlayer, player.position);
-    nextMatch = dropped.state;
-    events.push(...dropped.events);
-  }
-
-  return {
-    state: nextMatch,
-    events
-  };
-}
-
 function applyTileEffectToPlayer(
   match: MatchState,
   playerId: PlayerId,
   tileKind: TileKind,
   ownTurn: boolean
 ): { readonly state: MatchState; readonly events: readonly DomainEvent[]; readonly endsTurnImmediately: boolean } {
-  if (tileKind === "plain" || tileKind === "river") {
-    return {
-      state: match,
-      events: [],
-      endsTurnImmediately: false
-    };
-  }
-
-  let nextMatch = match;
-  const events: DomainEvent[] = [];
-  let endsTurnImmediately = false;
-  let player = getPlayerOrThrow(nextMatch, playerId);
-
-  switch (tileKind) {
-    case "fire": {
-      const updatedPlayer: PlayerState = {
-        ...player,
-        status: {
-          ...player.status,
-          fire: true
-        }
-      };
-      nextMatch = updatePlayer(nextMatch, updatedPlayer);
-      events.push(createStatusChangedEvent(updatedPlayer));
-      return {
-        state: nextMatch,
-        events,
-        endsTurnImmediately: false
-      };
-    }
-
-    case "giantFlame": {
-      const updatedPlayer: PlayerState = {
-        ...player,
-        status: {
-          ...player.status,
-          fire: true
-        }
-      };
-      nextMatch = updatePlayer(nextMatch, updatedPlayer);
-      events.push(createStatusChangedEvent(updatedPlayer));
-      return {
-        state: nextMatch,
-        events,
-        endsTurnImmediately: false
-      };
-    }
-
-    case "water": {
-      const updatedPlayer: PlayerState = {
-        ...player,
-        status: {
-          ...player.status,
-          fire: false,
-          water: true
-        }
-      };
-      nextMatch = updatePlayer(nextMatch, updatedPlayer);
-      events.push(createStatusChangedEvent(updatedPlayer));
-      return {
-        state: nextMatch,
-        events,
-        endsTurnImmediately: false
-      };
-    }
-
-    case "electric": {
-      const damaged = applyDamage(nextMatch, playerId, 3);
-      nextMatch = damaged.state;
-      events.push(...damaged.events);
-      player = getPlayerOrThrow(nextMatch, playerId);
-
-      if (player.status.water) {
-        const updatedPlayer: PlayerState = {
-          ...player,
-          status: {
-            ...player.status,
-            skipNextTurnCount: player.status.skipNextTurnCount + 1
-          }
-        };
-        nextMatch = updatePlayer(nextMatch, updatedPlayer);
-        events.push(createStatusChangedEvent(updatedPlayer));
-        endsTurnImmediately = ownTurn;
+  const result = runResolutionPipeline({
+    match,
+    actorPlayerId: ownTurn ? playerId : null,
+    steps: [
+      {
+        kind: "applyTileEffect",
+        playerId,
+        tileKind,
+        ownTurn
       }
+    ]
+  });
 
-      return {
-        state: nextMatch,
-        events,
-        endsTurnImmediately
-      };
-    }
-
-    case "ice": {
-      if (player.carriedTreasureId === null) {
-        return {
-          state: nextMatch,
-          events,
-          endsTurnImmediately: false
-        };
-      }
-
-      const dropped = dropCarriedTreasure(
-        nextMatch,
-        player,
-        chooseTreasureDropPosition(player)
-      );
-
-      return {
-        state: dropped.state,
-        events: [...events, ...dropped.events],
-        endsTurnImmediately: false
-      };
-    }
-  }
+  return {
+    state: result.state,
+    events: result.events,
+    endsTurnImmediately: result.endsTurnImmediately
+  };
 }
 
 function resolveThrownTileResult(targetKind: TileKind, thrownKind: TileKind): TileKind {
@@ -1290,7 +1064,7 @@ export function moveActivePlayer(
   const treasure = findTreasureAtPosition(nextMatch, nextPosition);
   const movedPlayer = getPlayerOrThrow(nextMatch, playerId);
 
-  if (treasure && movedPlayer.carriedTreasureId === null) {
+  if (treasure && !movedPlayer.eliminated && movedPlayer.carriedTreasureId === null) {
     const pickedUpTreasure: TreasureState = {
       ...treasure,
       position: null,
@@ -1817,7 +1591,7 @@ function resolveSpecialMovement(
   const movedPlayer = getPlayerOrThrow(nextMatch, playerId);
   const treasure = findTreasureAtPosition(nextMatch, nextPosition);
 
-  if (treasure && movedPlayer.carriedTreasureId === null) {
+  if (treasure && !movedPlayer.eliminated && movedPlayer.carriedTreasureId === null) {
     const pickedUpTreasure: TreasureState = {
       ...treasure,
       position: null,
@@ -2067,53 +1841,24 @@ export function useSpecialCard(
       );
     }
 
-    if (!isBombTargetInRange(player.position, input.targetPosition)) {
-      throw new DomainError(
-        "INVALID_SPECIAL_CARD_TARGET",
-        "Bomb cards require a target within 3 tiles in a straight line."
-      );
-    }
-
-    const targetPosition = input.targetPosition;
-    const targetTileKind: TileKind =
-      input.cardType === "flameBomb" ? "fire" : "electric";
-    const beforeBoard = nextMatch.board;
-    const fence = findFenceAtPosition(beforeBoard, targetPosition);
-
-    let mutatedBoard = beforeBoard;
-
-    if (fence) {
-      mutatedBoard = removeFence(mutatedBoard, fence.id);
-      events.push({
-        type: "fenceRemoved",
-        fenceId: fence.id
-      });
-    }
-
-    mutatedBoard = setTileKind(mutatedBoard, targetPosition, targetTileKind);
-    const normalized = normalizeBoardAfterMutation(mutatedBoard, [targetPosition]);
-    nextMatch = updateBoard(nextMatch, normalized.board);
-    events.push(
-      ...collectTileChangeEvents(beforeBoard, nextMatch.board, [
-        targetPosition,
-        ...normalized.changes.map((change) => change.position)
-      ])
-    );
-
-    const impactedPlayers = Object.values(nextMatch.players).filter((candidate) => {
-      return !candidate.eliminated && isSamePosition(candidate.position, targetPosition);
+    const resolution = runResolutionPipeline({
+      match: nextMatch,
+      actorPlayerId: input.playerId,
+      steps: [
+        {
+          kind: "removeFenceAt",
+          position: input.targetPosition
+        },
+        ...createBombResolutionPlan(nextMatch, {
+          playerId: input.playerId,
+          cardType: input.cardType,
+          targetPosition: input.targetPosition
+        })
+      ]
     });
 
-    for (const impactedPlayer of impactedPlayers) {
-      const effect = applyTileEffectToPlayer(
-        nextMatch,
-        impactedPlayer.id,
-        targetTileKind,
-        impactedPlayer.id === input.playerId
-      );
-      nextMatch = effect.state;
-      events.push(...effect.events);
-    }
+    nextMatch = resolution.state;
+    events.push(...resolution.events);
   }
 
   if (input.cardType === "jump") {

@@ -24,6 +24,7 @@ import {
   createPrioritySubmissionFixture,
   createTwoPlayerMatchFixture
 } from "../../testkit/src/index.ts";
+import { createBombResolutionPlan } from "./special-card-resolution.ts";
 
 function mustPlayer(match: MatchState, playerId: string): PlayerState {
   const player = match.players[playerId];
@@ -338,6 +339,59 @@ test("electric thrown onto a wet player schedules a skipped next turn", () => {
   assert.ok(result.events.some((event) => event.type === "turnSkipped"));
 });
 
+test("lethal electric tile damage eliminates the player and drops carried treasure", () => {
+  const match = createTwoPlayerMatchFixture({
+    treasures: [],
+    tiles: [{ position: createPosition(0, 1), kind: "electric" }]
+  });
+  const carrying: MatchState = {
+    ...match,
+    players: {
+      ...match.players,
+      "player-1": {
+        ...mustPlayer(match, "player-1"),
+        hitPoints: 3,
+        carriedTreasureId: "treasure-x"
+      }
+    },
+    treasures: {
+      ...match.treasures,
+      "treasure-x": {
+        id: "treasure-x",
+        slot: 1,
+        ownerPlayerId: "player-1",
+        points: 1,
+        initialPosition: null,
+        position: null,
+        carriedByPlayerId: "player-1",
+        openedByPlayerId: null,
+        removedFromRound: false
+      }
+    }
+  };
+
+  const result = moveActivePlayer(carrying, "player-1", "south");
+  const eliminated = mustPlayer(result.state, "player-1");
+  const dropped = mustTreasure(result.state, "treasure-x");
+
+  assert.equal(eliminated.hitPoints, 0);
+  assert.equal(eliminated.eliminated, true);
+  assert.equal(eliminated.carriedTreasureId, null);
+  assert.deepEqual(dropped.position, createPosition(0, 1));
+  assert.equal(result.state.round.activePlayerId, "player-2");
+  assert.deepEqual(
+    result.events.map((event) => event.type),
+    [
+      "playerMoved",
+      "playerDamaged",
+      "playerEliminated",
+      "treasureDropped",
+      "turnStageChanged",
+      "turnEnded"
+    ]
+  );
+});
+
 test("three connected fire tiles normalize into giant flame", () => {
   const match = createTwoPlayerMatchFixture({
     treasures: [],
@@ -486,6 +540,33 @@ test("large fence cards place a three-tile straight fence and consume one charge
   assert.equal(result.state.round.activePlayerId, "player-2");
 });
 
+test("bomb special cards build explicit board-impact resolution plans", () => {
+  const match = createTwoPlayerMatchFixture({
+    treasures: [],
+    tiles: [{ position: createPosition(0, 2), kind: "water" }]
+  });
+  const plan = createBombResolutionPlan(match, {
+    playerId: "player-1",
+    cardType: "flameBomb",
+    targetPosition: createPosition(0, 2)
+  });
+
+  assert.deepEqual(plan, [
+    {
+      kind: "setTile",
+      position: createPosition(0, 2),
+      tileKind: "fire",
+      normalize: true
+    },
+    {
+      kind: "applyTileEffectToOccupants",
+      position: createPosition(0, 2),
+      tileKind: "fire",
+      actorPlayerId: "player-1"
+    }
+  ]);
+});
+
 test("special card bombs can modify the board and remove fences", () => {
   const match = createTwoPlayerMatchFixture({
     tiles: [{ position: createPosition(0, 2), kind: "water" }],
@@ -525,6 +606,53 @@ test("special card bombs can modify the board and remove fences", () => {
   assert.equal(result.state.board.tiles["0,2"]?.kind, "fire");
   assert.equal(result.state.board.fences["fence-a"], undefined);
   assert.equal(result.state.round.activePlayerId, "player-2");
+});
+
+test("electric bomb damage and wet stun resolve before turn advancement", () => {
+  const match = createTwoPlayerMatchFixture({
+    treasures: []
+  });
+  const stepped = moveActivePlayer(match, "player-1", "south").state;
+  const prepared = replacePlayer(
+    replacePlayer(stepped, "player-1", (player) => ({
+      ...player,
+      specialInventory: {
+        ...player.specialInventory,
+        electricBomb: 1
+      }
+    })),
+    "player-2",
+    (player) => ({
+      ...player,
+      position: createPosition(0, 3),
+      status: {
+        ...player.status,
+        water: true
+      }
+    })
+  );
+
+  const result = useSpecialCard(prepared, {
+    playerId: "player-1",
+    cardType: "electricBomb",
+    targetPosition: createPosition(0, 3)
+  });
+  const target = mustPlayer(result.state, "player-2");
+
+  assert.equal(target.hitPoints, 7);
+  assert.equal(target.status.skipNextTurnCount, 0);
+  assert.equal(result.state.round.activePlayerId, "player-1");
+  assert.deepEqual(
+    result.events.map((event) => event.type),
+    [
+      "specialCardUsed",
+      "tileChanged",
+      "playerDamaged",
+      "playerStatusChanged",
+      "turnEnded",
+      "turnSkipped"
+    ]
+  );
 });
 
 test("cold bombs only target players or tiles within three straight-line tiles", () => {

@@ -5,5 +5,7 @@ export * from "./events.ts";
 export * from "./model.ts";
 export * from "./position.ts";
 export * from "./priority.ts";
+export * from "./resolution.ts";
 export * from "./rotation.ts";
 export * from "./rules.ts";
+export * from "./special-card-resolution.ts";
