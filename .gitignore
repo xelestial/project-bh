@@ -4,3 +4,4 @@ dist/
 .pnpm-store/
 test-results/
 .playwright-mcp/
+.gstack/
