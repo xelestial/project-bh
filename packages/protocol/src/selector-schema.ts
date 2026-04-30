@@ -9,17 +9,19 @@ export interface SelectorEnvelope<TPayload = unknown> {
   readonly payload: TPayload;
 }
 
-export interface ValidationFailure {
+export interface SelectorValidationFailure {
   readonly ok: false;
   readonly message: string;
 }
 
-export interface ValidationSuccess<TValue> {
+export interface SelectorValidationSuccess<TValue> {
   readonly ok: true;
   readonly value: TValue;
 }
 
-export type ValidationResult<TValue> = ValidationFailure | ValidationSuccess<TValue>;
+export type SelectorValidationResult<TValue> =
+  | SelectorValidationFailure
+  | SelectorValidationSuccess<TValue>;
 
 const SELECTOR_IDS = new Set<string>([MATCH_SNAPSHOT_BUNDLE_SELECTOR_ID]);
 const ENVELOPE_FIELDS = new Set(["selectorId", "version", "revision", "payload"]);
@@ -30,7 +32,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function validateSelectorEnvelope(
   value: unknown
-): ValidationResult<SelectorEnvelope> {
+): SelectorValidationResult<SelectorEnvelope> {
   if (!isRecord(value)) {
     return { ok: false, message: "Selector envelope must be an object." };
   }
