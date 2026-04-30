@@ -118,12 +118,12 @@ The profile ids add stable metric tags and workload defaults for selector refres
 - Every manual issue that changes rules behavior should become a regression test and, when reusable, an implementation-log entry.
 - GUI interaction regressions should be captured at two layers:
   - domain/application tests for legality
-  - browser-facing smoke tests for treasure placement, sequential auction reveal, and right-click action query
+  - browser-facing smoke tests for treasure placement, sequential auction reveal, right-click action query, priority cards, turn order, move highlights, and overlay action visibility
   - UI checks for card-shaped priority inventory and visible turn-order chips
   - targeted UI tests for move highlights and overlay state
   - snapshot-boundary tests that assert hidden information never leaks through frontend selector payloads
 
 ## Planned next layers
 
-1. Add visual browser assertions for the new priority, turn-order, and overlay model states.
-2. Add resolved scenario fixtures for more special-card combinations as rules stabilize.
+1. Add screenshot or pixel-based browser assertions once a stable CI browser runner is available.
+2. Add resolved scenario fixtures for newly finalized special-card combinations as rules stabilize.

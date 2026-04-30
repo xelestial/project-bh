@@ -35,7 +35,7 @@ The first parity targets should be:
 - replay fixtures for full rounds, starting with `docs/fixtures/replays/five-round-command-log.v1.json`
 - tile interaction and status golden cases, including river, ice, elimination, and skip-countdown samples in `docs/fixtures/rules/`
 - rotation golden cases in `docs/fixtures/rotations/` for cross5 and rectangle6 large-hammer transforms
-- auction and special-card scenario fixtures in `docs/fixtures/scenarios/`
+- auction and special-card scenario fixtures in `docs/fixtures/scenarios/`, including flame-bomb fence removal, recovery potion status clearing, and jump/hook mobility samples
 - charged-inventory projection samples for the player HUD in `docs/fixtures/projections/`
 - protocol snapshot samples in `docs/fixtures/protocol/`
 - granular selector payload samples for public state, viewer-private state, turn hints, and the React compatibility bundle in `docs/fixtures/selectors/`

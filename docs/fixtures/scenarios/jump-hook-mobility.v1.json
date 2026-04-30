@@ -1,0 +1,46 @@
+{
+  "scenarioId": "project-bh.scenario.jump-hook-mobility.v1",
+  "version": 1,
+  "input": {
+    "jump": {
+      "playerId": "player-1",
+      "targetPosition": {
+        "x": 0,
+        "y": 3
+      }
+    },
+    "hook": {
+      "playerId": "player-2",
+      "targetPlayerId": "player-1",
+      "targetPositionBeforeHook": {
+        "x": 14,
+        "y": 0
+      }
+    }
+  },
+  "output": {
+    "jumpPosition": {
+      "x": 0,
+      "y": 3
+    },
+    "hookPosition": {
+      "x": 15,
+      "y": 0
+    },
+    "jumpRemainingCharges": 0,
+    "hookRemainingCharges": 0,
+    "activePlayerId": "player-1",
+    "eventTypes": {
+      "jump": [
+        "specialCardUsed",
+        "playerMoved",
+        "turnEnded"
+      ],
+      "hook": [
+        "specialCardUsed",
+        "playerMoved",
+        "turnEnded"
+      ]
+    }
+  }
+}

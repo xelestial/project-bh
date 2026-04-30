@@ -1,0 +1,32 @@
+{
+  "scenarioId": "project-bh.scenario.recovery-potion-clears-status.v1",
+  "version": 1,
+  "input": {
+    "activePlayerId": "player-1",
+    "cardType": "recoveryPotion",
+    "startingHitPoints": 4,
+    "startingStatus": {
+      "fire": true,
+      "water": true,
+      "skipNextTurnCount": 1,
+      "movementLimit": 1
+    }
+  },
+  "output": {
+    "hitPoints": 10,
+    "status": {
+      "fire": false,
+      "water": false,
+      "skipNextTurnCount": 0,
+      "movementLimit": null
+    },
+    "remainingCharges": 0,
+    "activePlayerId": "player-2",
+    "events": [
+      "specialCardUsed",
+      "playerDamaged",
+      "playerStatusChanged",
+      "turnEnded"
+    ]
+  }
+}

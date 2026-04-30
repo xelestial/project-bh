@@ -27,6 +27,9 @@ test("Unity parity asset catalog references checked-in fixture files", () => {
 
   const requiredAssetIds = new Set([
     "scenario.auction-special-card-flow",
+    "scenario.flame-bomb-removes-fence",
+    "scenario.recovery-potion-clears-status",
+    "scenario.jump-hook-mobility",
     "projection.charged-inventory-hud",
     "protocol.snapshot-sample",
     "protocol.server-rejection-catalog",

@@ -88,6 +88,24 @@
       "consumer": ["unity-rules", "auction-flow-test"]
     },
     {
+      "id": "scenario.flame-bomb-removes-fence",
+      "kind": "scenario",
+      "path": "docs/fixtures/scenarios/flame-bomb-removes-fence.v1.json",
+      "consumer": ["unity-rules", "special-card-test"]
+    },
+    {
+      "id": "scenario.recovery-potion-clears-status",
+      "kind": "scenario",
+      "path": "docs/fixtures/scenarios/recovery-potion-clears-status.v1.json",
+      "consumer": ["unity-rules", "status-effect-test"]
+    },
+    {
+      "id": "scenario.jump-hook-mobility",
+      "kind": "scenario",
+      "path": "docs/fixtures/scenarios/jump-hook-mobility.v1.json",
+      "consumer": ["unity-rules", "movement-card-test"]
+    },
+    {
       "id": "projection.charged-inventory-hud",
       "kind": "projection",
       "path": "docs/fixtures/projections/charged-inventory-hud.v1.json",

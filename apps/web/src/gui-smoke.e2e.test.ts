@@ -12,6 +12,10 @@ import { WebSocket } from "ws";
 
 import { startHttpServer } from "../../server/src/http-server.ts";
 import { createWebViteConfig } from "../config.ts";
+import {
+  collectBrowserVisualFailures,
+  type BrowserVisualState
+} from "./browser-visual-assertions.ts";
 
 interface RemoteTarget {
   readonly id: string;
@@ -572,6 +576,54 @@ function assertMatchLayoutSupportsMobile(metrics: MatchLayoutMetrics): void {
   );
 }
 
+async function readBrowserVisualState(page: CdpPage): Promise<BrowserVisualState> {
+  return await page.evaluate<BrowserVisualState>(`
+    (() => {
+      const isVisible = (element) => {
+        if (!(element instanceof HTMLElement)) {
+          return false;
+        }
+
+        const bounds = element.getBoundingClientRect();
+        const styles = getComputedStyle(element);
+        return bounds.width > 0 && bounds.height > 0 && styles.visibility !== 'hidden' && styles.display !== 'none';
+      };
+      const priorityCards = [...document.querySelectorAll('[data-priority-card]')];
+      const enabledPriorityCards = priorityCards.filter((element) => element instanceof HTMLButtonElement && !element.disabled);
+      const turnOrderNodes = [...document.querySelectorAll('.turn-order-node')];
+      const app = document.querySelector('[data-screen="match"]');
+      const turnStageText = document.querySelector('[data-testid="turn-stage"]')?.textContent ?? '';
+      const contextMenu = document.querySelector('[data-testid="context-menu"]');
+      const phase = app?.getAttribute('data-round-phase') ?? 'auction';
+      const turnStage = turnStageText.includes('1칸 이동')
+        ? 'mandatoryStep'
+        : turnStageText.includes('행동 선택')
+          ? 'secondaryAction'
+          : null;
+
+      return {
+        phase,
+        turnStage,
+        priorityCardCount: priorityCards.length,
+        enabledPriorityCardCount: enabledPriorityCards.length,
+        turnOrderNodeCount: turnOrderNodes.length,
+        visibleTurnOrderNodeCount: turnOrderNodes.filter(isVisible).length,
+        mandatoryMoveHintCount: document.querySelectorAll('.hint-badge.hint-step').length,
+        secondaryMoveHintCount: document.querySelectorAll('.hint-badge.hint-action').length,
+        actionStatusVisible: isVisible(document.querySelector('.action-status-strip')),
+        contextMenuVisible: isVisible(contextMenu),
+        contextActionCount: document.querySelectorAll('[data-testid="context-menu"] [data-action-id]').length,
+        horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1
+      };
+    })()
+  `);
+}
+
+async function assertBrowserVisualState(page: CdpPage, label: string): Promise<void> {
+  const failures = collectBrowserVisualFailures(await readBrowserVisualState(page));
+  assert.deepEqual(failures, [], label);
+}
+
 async function submitCurrentAuctionBid(page: CdpPage): Promise<void> {
   const submitted = await page.evaluate<boolean>(`
     (async () => {
@@ -931,6 +983,7 @@ test(
         "guest priority phase",
         20_000
       );
+      await assertBrowserVisualState(hostPage, "priority cards and turn-order chips should be visually available");
 
       await submitPriorityCard(hostPage, 6);
       await submitPriorityCard(guestPage, 5);
@@ -941,18 +994,21 @@ test(
         "host in-turn mandatory step",
         20_000
       );
+      await assertBrowserVisualState(hostPage, "mandatory move highlights should be visible");
 
       await hostPage.rightClickSelector('button[data-cell="1,0"]');
       await hostPage.waitForExpression(
         `Boolean(document.querySelector('[data-testid="context-menu"] [data-action-id="move-player"]'))`,
         "move action in context menu"
       );
+      await assertBrowserVisualState(hostPage, "move context menu should expose visible actions");
       await hostPage.clickSelector('[data-testid="context-menu"] [data-action-id="move-player"]');
       await hostPage.waitForExpression(
         `document.querySelector('[data-testid="turn-stage"]')?.textContent?.includes('행동 선택') === true`,
         "secondary action stage after move",
         20_000
       );
+      await assertBrowserVisualState(hostPage, "secondary action overlay should be visible");
 
       await hostPage.waitForExpression(
         `document.querySelector('[data-testid="prepare-next-round-button"]') === null`,
@@ -970,6 +1026,7 @@ test(
         `Boolean(document.querySelector('[data-testid="context-menu"] [data-action-id="fence-first"]'))`,
         "fence first target action"
       );
+      await assertBrowserVisualState(hostPage, "fence target context menu should expose visible actions");
       await hostPage.clickSelector('[data-testid="context-menu"] [data-action-id="fence-first"]');
       await hostPage.rightClickSelector('button[data-cell="2,1"]');
       await hostPage.waitForExpression(
