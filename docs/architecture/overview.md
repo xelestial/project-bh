@@ -58,7 +58,7 @@ The current baseline now covers:
 - next-round preparation and match-completion calculation
 - protocol validation for the current command set
 - in-memory authoritative session management
-- local client adapter and view-model composition
+- local client adapter and React playtest-shell view-model composition
 - player-private snapshot projection for hidden treasure data
 - server-issued reconnect/session tokens so transport auth does not trust public `playerId` values
 - HMAC-hashed session token storage, cryptographic invite-code generation, production Redis config validation, CORS allowlists, and fixed-window request limits
@@ -81,8 +81,8 @@ The current baseline now covers:
 
 ## Near-term build order
 
-1. Add React shell UI component tests around the playtest contract.
-2. Expand browser smoke coverage for special-card targeting, fence purchase, and next-round progression.
+1. Expand browser smoke coverage for special-card targeting, fence purchase, and next-round progression.
+2. Add Unity parity asset catalog samples that enumerate the reusable fixture set.
 
 The more detailed sequence now lives in `docs/planning/implementation-roadmap.md`.
 

@@ -6,10 +6,19 @@ import type {
   PendingCellAction
 } from "../../../packages/protocol/src/index.ts";
 import {
-  SPECIAL_CARD_TYPES,
   type RoundPhase,
   type SpecialCardType
 } from "../../../packages/domain/src/index.ts";
+import {
+  buildActionStatusView,
+  buildSpecialCardButtonModels,
+  formatSpecialCardLabel,
+  formatSpecialCardTargetHint,
+  formatTurnStage,
+  getDefaultMobileResourceTab,
+  type MobileResourceTab,
+  type TurnStage
+} from "./playtest-shell-view-model.ts";
 import {
   createBrowserTransportConfig,
   resolveHttpUrl,
@@ -26,8 +35,6 @@ import {
 
 type RoomStatus = "lobby" | "started";
 type RoomVisibility = "public" | "private";
-type TurnStage = "mandatoryStep" | "secondaryAction";
-type MobileResourceTab = "actions" | "hand" | "players" | "treasures";
 
 interface RoomPlayer {
   id: string;
@@ -475,17 +482,6 @@ function formatPoints(points: number): string {
   return points > 0 ? `+${points}` : String(points);
 }
 
-function formatTurnStage(stage: TurnStage | null): string {
-  switch (stage) {
-    case "mandatoryStep":
-      return "1칸 이동";
-    case "secondaryAction":
-      return "행동 선택";
-    default:
-      return "대기";
-  }
-}
-
 function formatRoundPhase(phase: RoundPhase): string {
   switch (phase) {
     case "treasurePlacement":
@@ -501,48 +497,7 @@ function formatRoundPhase(phase: RoundPhase): string {
   }
 }
 
-function getDefaultMobileResourceTab(phase: RoundPhase): MobileResourceTab {
-  switch (phase) {
-    case "treasurePlacement":
-    case "prioritySubmission":
-      return "hand";
-    case "completed":
-      return "treasures";
-    case "auction":
-    case "inTurn":
-      return "actions";
-  }
-}
-
-const SPECIAL_CARD_LABELS: Readonly<Record<SpecialCardType, string>> = {
-  coldBomb: "냉기 폭탄",
-  flameBomb: "화염 폭탄",
-  electricBomb: "전기 폭탄",
-  largeHammer: "대형 망치",
-  fence: "울타리",
-  largeFence: "대형 울타리",
-  recoveryPotion: "회복제",
-  jump: "뛰어넘기",
-  hook: "갈고리"
-};
-
-const SPECIAL_CARD_TARGET_HINTS: Readonly<Record<SpecialCardType, string>> = {
-  coldBomb: "타일 또는 플레이어 지정",
-  flameBomb: "타일 지정",
-  electricBomb: "타일 지정",
-  largeHammer: "회전 범위 지정",
-  fence: "두 칸 지정",
-  largeFence: "세 칸 직선 지정",
-  recoveryPotion: "즉시 사용",
-  jump: "2칸 착지 지정",
-  hook: "직선 플레이어 지정"
-};
-
 const AUCTION_BID_PRESETS = [0, 1, 2, 3, 4, 5] as const;
-
-function formatSpecialCardLabel(cardType: SpecialCardType): string {
-  return SPECIAL_CARD_LABELS[cardType];
-}
 
 function pendingActionLabel(pendingAction: PendingCellAction | null, snapshot: ProjectedSnapshot | null): string | null {
   if (!pendingAction) {
@@ -679,65 +634,17 @@ function ActionStatusStrip(props: {
   rotationMode: boolean;
   onToggleRotationMode: () => void;
 }) {
-  const { turnHints } = props.snapshot.viewer;
-  const rotationOrigins = turnHints.rotationOrigins ?? [];
-  const phase = props.snapshot.state.round.phase;
-  const statusLabel =
-    phase === "treasurePlacement"
-      ? "보물 배치 중"
-      : phase === "prioritySubmission"
-        ? "우선권 제출 중"
-        : props.isMyTurn
-          ? `현재 단계: ${formatTurnStage(turnHints.stage)}`
-          : "상대 턴 진행 중";
-  const items = [
-    {
-      label: "1칸 이동",
-      enabled: turnHints.stage === "mandatoryStep" && turnHints.mandatoryMoveTargets.length > 0,
-      current: turnHints.stage === "mandatoryStep",
-      detail:
-        turnHints.stage === "mandatoryStep"
-          ? `${turnHints.mandatoryMoveTargets.length}칸 가능`
-          : "선행 조건"
-    },
-    {
-      label: "2칸 이동",
-      enabled: turnHints.availableSecondaryActions.move,
-      current: false,
-      detail: turnHints.availableSecondaryActions.move
-        ? `${turnHints.secondaryMoveTargets.length}곳 가능`
-        : "잠김"
-    },
-    {
-      label: "타일 던지기",
-      enabled: turnHints.availableSecondaryActions.throwTile,
-      current: false,
-      detail: turnHints.availableSecondaryActions.throwTile ? "활성" : "잠김"
-    },
-    {
-      label: "회전하기",
-      enabled: turnHints.availableSecondaryActions.rotateTiles,
-      current: props.rotationMode,
-      detail: turnHints.availableSecondaryActions.rotateTiles ? `${rotationOrigins.length}곳 가능` : "잠김"
-    },
-    {
-      label: "특수카드",
-      enabled: turnHints.availableSecondaryActions.specialCard,
-      current: false,
-      detail: turnHints.availableSecondaryActions.specialCard ? "활성" : "잠김"
-    },
-    {
-      label: "보물 열기",
-      enabled: turnHints.availableSecondaryActions.openTreasure,
-      current: false,
-      detail: turnHints.availableSecondaryActions.openTreasure ? "활성" : "잠김"
-    }
-  ];
+  const status = buildActionStatusView({
+    phase: props.snapshot.state.round.phase,
+    turnHints: props.snapshot.viewer.turnHints,
+    isMyTurn: props.isMyTurn,
+    rotationMode: props.rotationMode
+  });
 
   return (
     <section className="action-status-strip">
-      <strong>{statusLabel}</strong>
-      {items.map((item) => (
+      <strong>{status.statusLabel}</strong>
+      {status.items.map((item) => (
         item.label === "회전하기" ? (
         <button
           key={item.label}
@@ -1180,7 +1087,7 @@ function AuctionOverlay(props: {
               draggable="false"
             />
             <strong>{formatSpecialCardLabel(currentOffer.cardType)}</strong>
-            <small>{SPECIAL_CARD_TARGET_HINTS[currentOffer.cardType]}</small>
+            <small>{formatSpecialCardTargetHint(currentOffer.cardType)}</small>
           </article>
 
           <div className="auction-controls">
@@ -1489,9 +1396,17 @@ export function App() {
   const isMyTurn = snapshot?.state.round.activePlayerId === playerId;
   const pendingLabel = pendingActionLabel(pendingAction, snapshot);
   const turnHints = snapshot?.viewer.turnHints ?? null;
-  const ownedSpecialCards = me
-    ? SPECIAL_CARD_TYPES.filter((cardType) => me.specialInventory[cardType] > 0)
-    : [];
+  const selectedSpecialCard = pendingAction?.kind === "specialCard" ? pendingAction.cardType : null;
+  const specialCardButtons =
+    me && turnHints
+      ? buildSpecialCardButtonModels({
+          isMyTurn: Boolean(isMyTurn),
+          stage: turnHints.stage,
+          specialInventory: me.specialInventory,
+          availableSpecialCards: turnHints.availableSpecialCards,
+          selectedCardType: selectedSpecialCard
+        })
+      : [];
   const highlightedCells =
     interactionMode === "rotate"
       ? []
@@ -2577,50 +2492,42 @@ export function App() {
                   }`}
               >
                 <h3>Special Cards</h3>
-                <div className={`overlay-row inventory-row card-shelf ${ownedSpecialCards.length === 0 ? "is-empty" : ""}`}>
-                  {ownedSpecialCards.length === 0 ? (
+                <div className={`overlay-row inventory-row card-shelf ${specialCardButtons.length === 0 ? "is-empty" : ""}`}>
+                  {specialCardButtons.length === 0 ? (
                     <span className="empty-shelf-message">보유 중인 특수카드가 없습니다.</span>
                   ) : null}
-                  {ownedSpecialCards.map((card) => {
-                    const chargeCount = me?.specialInventory[card] ?? 0;
-                    const isAvailable = snapshot.viewer.turnHints.availableSpecialCards[card];
-                    const isDirectUse = card === "recoveryPotion";
-
+                  {specialCardButtons.map((card) => {
                     return (
                       <button
-                        key={card}
-                        className={`overlay-card special-card special-card-button ${pendingAction?.kind === "specialCard" && pendingAction.cardType === card ? "is-selected" : ""} ${isAvailable ? "" : "is-unavailable"}`}
+                        key={card.cardType}
+                        className={`overlay-card special-card special-card-button ${card.selected ? "is-selected" : ""} ${card.available ? "" : "is-unavailable"}`}
                         data-testid="special-card-button"
-                        data-special-card={card}
-                        disabled={
-                          !isMyTurn ||
-                          snapshot.viewer.turnHints.stage !== "secondaryAction" ||
-                          !isAvailable
-                        }
+                        data-special-card={card.cardType}
+                        disabled={card.disabled}
                         onClick={() => {
-                          if (isDirectUse) {
+                          if (card.directUse) {
                             void sendCommand({
                               type: "match.useSpecialCard",
-                              cardType: card
+                              cardType: card.cardType
                             });
                             return;
                           }
 
                           setPendingAction((current) =>
-                            current?.kind === "specialCard" && current.cardType === card
+                            current?.kind === "specialCard" && current.cardType === card.cardType
                               ? null
-                              : { kind: "specialCard", cardType: card }
+                              : { kind: "specialCard", cardType: card.cardType }
                           );
                         }}
                       >
-                        <span className="card-corner-chip card-count-chip">×{chargeCount}</span>
+                        <span className="card-corner-chip card-count-chip">×{card.chargeCount}</span>
                         <img
                           className="special-card-icon"
-                          src={getSpecialCardIconSrc(card)}
+                          src={getSpecialCardIconSrc(card.cardType)}
                           alt=""
                           draggable="false"
                         />
-                        <strong>{formatSpecialCardLabel(card)}</strong>
+                        <strong>{card.label}</strong>
                       </button>
                     );
                   })}
