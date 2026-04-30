@@ -32,7 +32,7 @@ Current coverage includes:
 - match completion that excludes eliminated players from winner calculation
 - application-layer rejection mapping
 - protocol payload validation
-- browser smoke coverage for host-create, guest-join, treasure placement, sequential auction reveal, and right-click movement query
+- browser smoke coverage for host-create, guest-join, treasure placement, sequential auction reveal, fence purchase, fence special-card targeting, right-click movement query, and next-round gate visibility
 - React playtest-shell view-model tests for action status chips, mobile resource defaults, and selector-driven special-card buttons
 - board bootstrap coverage for five fire, five water, and five electric tiles seeded inside the rotation zone
 - projector coverage for player-private treasure data and opener-only reveal behavior
@@ -114,4 +114,4 @@ BH_BENCH_ROOMS=100 BH_BENCH_PLAYERS=4 BH_BENCH_COMMANDS=1 pnpm benchmark:online
 
 ## Planned next layers
 
-1. Expand browser smoke coverage to include special-card targeting, fence purchase, and next-round progression.
+1. Add Unity parity asset catalog samples that enumerate reusable fixture sets and expected consumers.

@@ -81,8 +81,7 @@ The current baseline now covers:
 
 ## Near-term build order
 
-1. Expand browser smoke coverage for special-card targeting, fence purchase, and next-round progression.
-2. Add Unity parity asset catalog samples that enumerate the reusable fixture set.
+1. Add Unity parity asset catalog samples that enumerate the reusable fixture set.
 
 The more detailed sequence now lives in `docs/planning/implementation-roadmap.md`.
 

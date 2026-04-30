@@ -613,6 +613,67 @@ async function submitCurrentAuctionBid(page: CdpPage): Promise<void> {
   assert.equal(submitted, true, "Expected current auction bid to submit through the browser session.");
 }
 
+async function readActiveRoomEnvelope(page: CdpPage): Promise<{
+  readonly snapshot?: {
+    readonly state?: {
+      readonly board?: {
+        readonly fences?: Record<string, unknown>;
+      };
+    };
+    readonly viewer?: {
+      readonly self?: {
+        readonly specialInventory?: Record<string, number>;
+      };
+    };
+  };
+}> {
+  return await page.evaluate(`
+    (async () => {
+      const activeSession = JSON.parse(sessionStorage.getItem('project-bh.active-session') ?? 'null');
+
+      if (!activeSession) {
+        throw new Error('Missing active browser session.');
+      }
+
+      const response = await fetch('/api/rooms/' + activeSession.roomId + '?sessionToken=' + encodeURIComponent(activeSession.sessionToken));
+
+      if (!response.ok) {
+        throw new Error('Room refresh failed: ' + response.status);
+      }
+
+      return await response.json();
+    })()
+  `);
+}
+
+async function waitForSpecialInventory(page: CdpPage, cardType: string, expectedCharges: number): Promise<void> {
+  await waitFor(
+    async () => {
+      const envelope = await readActiveRoomEnvelope(page);
+      const charges = envelope.snapshot?.viewer?.self?.specialInventory?.[cardType];
+
+      if (charges !== expectedCharges) {
+        throw new Error(`Expected ${cardType} charges ${expectedCharges}, got ${String(charges)}.`);
+      }
+    },
+    { label: `${cardType} inventory ${expectedCharges}`, timeoutMs: 20_000 }
+  );
+}
+
+async function waitForFenceCount(page: CdpPage, expectedCount: number): Promise<void> {
+  await waitFor(
+    async () => {
+      const envelope = await readActiveRoomEnvelope(page);
+      const count = Object.keys(envelope.snapshot?.state?.board?.fences ?? {}).length;
+
+      if (count !== expectedCount) {
+        throw new Error(`Expected fence count ${expectedCount}, got ${count}.`);
+      }
+    },
+    { label: `fence count ${expectedCount}`, timeoutMs: 20_000 }
+  );
+}
+
 async function submitPriorityCard(page: CdpPage, priorityCard: number): Promise<void> {
   const submitted = await page.evaluate<boolean>(`
     (async () => {
@@ -672,7 +733,7 @@ async function placeTreasure(page: CdpPage, treasureId: string, cell: string): P
 }
 
 test(
-  "browser smoke covers treasure placement, sequential auction reveal, and right-click movement",
+  "browser smoke covers treasure placement, auction reveal, special-card targeting, and turn gates",
   { timeout: 120_000 },
   async (context) => {
     let backend: Awaited<ReturnType<typeof startHttpServer>> | null = null;
@@ -838,6 +899,9 @@ test(
 
       const revealedOffers: string[] = [];
 
+      await hostPage.clickSelector('[data-testid="auction-buy-fence-button"]');
+      await waitForSpecialInventory(hostPage, "fence", 3);
+
       for (let index = 0; index < 4; index += 1) {
         const currentOffer = await hostPage.textContent('.auction-showcase-card strong');
         const currentRound = await hostPage.textContent('[data-testid="auction-round-pill"]');
@@ -889,6 +953,32 @@ test(
         "secondary action stage after move",
         20_000
       );
+
+      await hostPage.waitForExpression(
+        `document.querySelector('[data-testid="prepare-next-round-button"]') === null`,
+        "next-round progression hidden before round completion"
+      );
+      await hostPage.waitForExpression(
+        `document.querySelector('[data-testid="special-card-button"][data-special-card="fence"]') instanceof HTMLButtonElement &&
+          !document.querySelector('[data-testid="special-card-button"][data-special-card="fence"]')?.hasAttribute('disabled')`,
+        "fence special card enabled in secondary action",
+        20_000
+      );
+      await hostPage.clickSelector('[data-testid="special-card-button"][data-special-card="fence"]');
+      await hostPage.rightClickSelector('button[data-cell="2,0"]');
+      await hostPage.waitForExpression(
+        `Boolean(document.querySelector('[data-testid="context-menu"] [data-action-id="fence-first"]'))`,
+        "fence first target action"
+      );
+      await hostPage.clickSelector('[data-testid="context-menu"] [data-action-id="fence-first"]');
+      await hostPage.rightClickSelector('button[data-cell="2,1"]');
+      await hostPage.waitForExpression(
+        `Boolean(document.querySelector('[data-testid="context-menu"] [data-action-id="fence-place"]'))`,
+        "fence placement action"
+      );
+      await hostPage.clickSelector('[data-testid="context-menu"] [data-action-id="fence-place"]');
+      await waitForSpecialInventory(hostPage, "fence", 2);
+      await waitForFenceCount(hostPage, 1);
     } finally {
       await hostPage?.close();
       await guestPage?.close();
