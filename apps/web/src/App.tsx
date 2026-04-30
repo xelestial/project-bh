@@ -651,6 +651,15 @@ function ActionStatusStrip(props: {
 }) {
   const { turnHints } = props.snapshot.viewer;
   const rotationOrigins = turnHints.rotationOrigins ?? [];
+  const phase = props.snapshot.state.round.phase;
+  const statusLabel =
+    phase === "treasurePlacement"
+      ? "보물 배치 중"
+      : phase === "prioritySubmission"
+        ? "우선권 제출 중"
+        : props.isMyTurn
+          ? `현재 단계: ${formatTurnStage(turnHints.stage)}`
+          : "상대 턴 진행 중";
   const items = [
     {
       label: "1칸 이동",
@@ -697,7 +706,7 @@ function ActionStatusStrip(props: {
 
   return (
     <section className="action-status-strip">
-      <strong>{props.isMyTurn ? `현재 단계: ${formatTurnStage(turnHints.stage)}` : "상대 턴 진행 중"}</strong>
+      <strong>{statusLabel}</strong>
       {items.map((item) => (
         item.label === "회전하기" ? (
         <button
