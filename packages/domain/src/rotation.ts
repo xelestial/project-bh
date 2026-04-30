@@ -154,5 +154,13 @@ export function isValidRotationSelection(selection: RotationSelection): boolean 
     keys.add(key);
   }
 
+  for (const direction of ["clockwise", "counterclockwise"] as const) {
+    for (const destination of getRotationPositionMapping(selection, direction).values()) {
+      if (!isWithinBoard(destination)) {
+        return false;
+      }
+    }
+  }
+
   return true;
 }

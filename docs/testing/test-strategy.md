@@ -44,6 +44,27 @@ Current coverage includes:
 - Ambiguous game behavior should be captured as a fixture or scenario test before UI work relies on it.
 - Unity parity should reuse the same scenario names and expected outcomes.
 
+## Property-based rule validation
+
+Project. BH uses `fast-check` to validate broad rule invariants in the domain layer. Property tests live next to domain example tests as `*.property.test.ts` files and use shared generators from `packages/testkit/src/property-arbitraries.ts`.
+
+Use property tests when a rule has many equivalent input shapes or when regressions are more likely to appear through combinations than through a single hand-written scenario. Good candidates include rotation mappings, board normalization, priority ordering, legal command replay, treasure ownership invariants, and protocol validation round trips.
+
+Every property must be deterministic. Do not call `Math.random()` from a property or from domain code under test. If a property fails, copy the fast-check seed and path from the failure output into a focused regression test before or with the fix.
+
+Run all property tests with:
+
+```bash
+node --experimental-strip-types --test packages/domain/src/*.property.test.ts
+```
+
+Run the full verification suite with:
+
+```bash
+pnpm test
+pnpm typecheck
+```
+
 ## Human playtest baseline
 
 - Local human-vs-human playtests should run against the authoritative HTTP/WebSocket server, not a client-only mock.

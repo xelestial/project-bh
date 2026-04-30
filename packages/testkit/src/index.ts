@@ -159,3 +159,5 @@ export function createAuctionFixture(
     started: false
   }));
 }
+
+export * from "./property-arbitraries.ts";
