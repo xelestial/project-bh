@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 72" fill="none">
+  <defs>
+    <radialGradient id="fireGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(48 44) rotate(90) scale(24 34)">
+      <stop stop-color="#FFD07A" stop-opacity="0.95"/>
+      <stop offset="0.6" stop-color="#FF8A3C" stop-opacity="0.64"/>
+      <stop offset="1" stop-color="#D23A16" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="fireCore" x1="48" y1="18" x2="48" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF0C9"/>
+      <stop offset="0.42" stop-color="#FFB055"/>
+      <stop offset="1" stop-color="#D5401A"/>
+    </linearGradient>
+  </defs>
+  <path d="M18 41c7-7 17-12 30-12 14 0 24 5 30 12-6 7-16 12-30 12-13 0-23-5-30-12Z" fill="url(#fireGlow)"/>
+  <path d="M49 18c2 7-3 9-5 14-2 4-1 7 1 9-3 1-5 3-7 6-3 7 2 13 10 13 10 0 17-7 17-18 0-7-4-12-8-16 0 5-2 7-5 10-3-3-4-7-3-11 1-4 1-6 0-7Z" fill="url(#fireCore)"/>
+  <path d="M44 47c2-3 5-4 8-2 3 3 3 7 0 10-2 2-6 3-8 0-2-2-2-5 0-8Z" fill="#FFF7E2" opacity="0.72"/>
+</svg>

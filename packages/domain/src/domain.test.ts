@@ -142,6 +142,17 @@ test("auction bids award cards and deduct score when the auction resolves", () =
   assert.ok(second.events.some((event) => event.type === "auctionResolved"));
 });
 
+test("players with negative score can still submit a zero auction bid", () => {
+  const match = replacePlayer(createAuctionFixture(), "player-1", (player) => ({
+    ...player,
+    score: -1
+  }));
+
+  const result = submitAuctionBids(match, "player-1", []);
+
+  assert.equal(result.state.round.auction.submittedBids["player-1"]?.amount, 0);
+});
+
 test("moving onto an unowned treasure picks it up and ends the turn", () => {
   const match = createTwoPlayerMatchFixture();
   const result = moveActivePlayer(match, "player-1", "east");
@@ -237,6 +248,42 @@ test("opening a carried treasure at the start tile adds score and advances the t
   assert.equal(openedPlayer.carriedTreasureId, null);
   assert.equal(openedTreasure.openedByPlayerId, "player-1");
   assert.equal(result.state.round.openedTreasureCount, 1);
+  assert.equal(result.state.round.activePlayerId, "player-2");
+});
+
+test("opening a carried treasure is also allowed at turn start on the start tile", () => {
+  const initialMatch = createTwoPlayerMatchFixture();
+  const moved = moveActivePlayer(initialMatch, "player-1", "east").state;
+  const movedPlayerOne = mustPlayer(moved, "player-1");
+  const movedPlayerTwo = mustPlayer(moved, "player-2");
+  const returnedToStart: MatchState = {
+    ...moved,
+    players: {
+      ...moved.players,
+      "player-1": {
+        ...movedPlayerOne,
+        position: createPosition(0, 0)
+      },
+      "player-2": {
+        ...movedPlayerTwo,
+        position: createPosition(19, 1)
+      }
+    },
+    round: {
+      ...moved.round,
+      activePlayerId: "player-1",
+      turn: {
+        playerId: "player-1",
+        stage: "mandatoryStep",
+        mandatoryStepDirection: null
+      }
+    }
+  };
+
+  const result = openCarriedTreasure(returnedToStart, "player-1");
+
+  assert.equal(mustPlayer(result.state, "player-1").carriedTreasureId, null);
+  assert.equal(mustTreasure(result.state, "treasure-1").openedByPlayerId, "player-1");
   assert.equal(result.state.round.activePlayerId, "player-2");
 });
 
@@ -622,6 +669,59 @@ test("preparing the next round resets round state and eventually completes the m
 
   assert.equal(result.state.completed, true);
   assert.ok(result.state.result);
+  assert.ok(result.events.some((event) => event.type === "matchCompleted"));
+});
+
+test("match completion picks 4-player winners by score then opened treasure count", () => {
+  const started = createMatchState({
+    matchId: "winner-resolution-match",
+    players: [
+      { id: "player-1", name: "Alpha" },
+      { id: "player-2", name: "Bravo" },
+      { id: "player-3", name: "Charlie" },
+      { id: "player-4", name: "Delta" }
+    ]
+  });
+
+  const completedRound: MatchState = {
+    ...started,
+    players: {
+      "player-1": {
+        ...started.players["player-1"]!,
+        score: 11,
+        openedTreasureIds: ["t1", "t2"]
+      },
+      "player-2": {
+        ...started.players["player-2"]!,
+        score: 11,
+        openedTreasureIds: ["t3"]
+      },
+      "player-3": {
+        ...started.players["player-3"]!,
+        score: 8,
+        openedTreasureIds: ["t4", "t5", "t6"]
+      },
+      "player-4": {
+        ...started.players["player-4"]!,
+        score: 11,
+        openedTreasureIds: ["t7", "t8"]
+      }
+    },
+    round: {
+      ...started.round,
+      roundNumber: 5,
+      phase: "completed",
+      activePlayerId: null,
+      turn: null
+    }
+  };
+
+  const result = prepareNextRound(completedRound);
+
+  assert.equal(result.state.completed, true);
+  assert.deepEqual(result.state.result?.winnerPlayerIds, ["player-1", "player-4"]);
+  assert.equal(result.state.result?.highestScore, 11);
+  assert.equal(result.state.result?.tiedOpenedTreasureCount, 2);
   assert.ok(result.events.some((event) => event.type === "matchCompleted"));
 });
 

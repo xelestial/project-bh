@@ -65,8 +65,11 @@ export interface ProjectedMatchSnapshot {
       readonly turn: MatchSessionSnapshot["state"]["round"]["turn"];
       readonly auction: {
         readonly currentOffer: MatchSessionSnapshot["state"]["round"]["auction"]["offers"][number] | null;
+        readonly currentOfferIndex: number;
+        readonly totalOffers: number;
         readonly resolvedOffers: MatchSessionSnapshot["state"]["round"]["auction"]["resolvedOffers"];
         readonly hasSubmittedBid: boolean;
+        readonly submittedPlayerIds: readonly string[];
       };
     };
     readonly completed: boolean;
@@ -168,8 +171,13 @@ export function projectSnapshotForPlayer(
         turn: snapshot.state.round.turn,
         auction: {
           currentOffer,
+          currentOfferIndex: snapshot.state.round.auction.currentOfferIndex,
+          totalOffers: snapshot.state.round.auction.offers.length,
           resolvedOffers: snapshot.state.round.auction.resolvedOffers,
-          hasSubmittedBid: snapshot.state.round.auction.submittedBids[viewerPlayerId] !== null
+          hasSubmittedBid: snapshot.state.round.auction.submittedBids[viewerPlayerId] !== null,
+          submittedPlayerIds: Object.entries(snapshot.state.round.auction.submittedBids)
+            .filter(([, bid]) => bid !== null)
+            .map(([playerId]) => playerId)
         }
       },
       completed: snapshot.state.completed,

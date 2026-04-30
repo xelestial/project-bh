@@ -271,6 +271,20 @@ function assertSecondaryActionTurn(match: MatchState, playerId: PlayerId): Playe
   return player;
 }
 
+function assertTreasureOpenTurn(match: MatchState, playerId: PlayerId): PlayerState {
+  const player = assertActivePlayer(match, playerId);
+  const stage = match.round.turn?.stage;
+
+  if (stage !== "mandatoryStep" && stage !== "secondaryAction") {
+    throw new DomainError(
+      "ROUND_NOT_READY",
+      "Treasures may only be opened during an active turn."
+    );
+  }
+
+  return player;
+}
+
 function assertPlayerCanUseBoardAction(player: PlayerState): void {
   if (player.carriedTreasureId !== null) {
     throw new DomainError(
@@ -992,7 +1006,9 @@ export function submitAuctionBids(
     );
   }
 
-  if (bidAmount > player.score) {
+  const maxAffordableBid = Math.max(player.score, 0);
+
+  if (bidAmount > maxAffordableBid) {
     throw new DomainError(
       "INVALID_AUCTION_BID",
       "An auction bid cannot exceed the player's current score."
@@ -1349,7 +1365,7 @@ export function openCarriedTreasure(
   match: MatchState,
   playerId: PlayerId
 ): DomainMutationResult {
-  const player = assertSecondaryActionTurn(match, playerId);
+  const player = assertTreasureOpenTurn(match, playerId);
 
   if (player.carriedTreasureId === null) {
     throw new DomainError(

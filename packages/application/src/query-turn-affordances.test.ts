@@ -22,6 +22,35 @@ test("turn affordances expose mandatory move targets at turn start", () => {
   assert.equal(result.availableSecondaryActions.move, false);
 });
 
+test("turn affordances expose open treasure at turn start when carrying at the start tile", () => {
+  const match = createTwoPlayerMatchFixture();
+  const playerOne = match.players["player-1"];
+  const playerTwo = match.players["player-2"];
+
+  assert.ok(playerOne);
+  assert.ok(playerTwo);
+
+  const prepared = {
+    ...match,
+    players: {
+      ...match.players,
+      "player-1": {
+        ...playerOne,
+        carriedTreasureId: "treasure-1"
+      },
+      "player-2": {
+        ...playerTwo,
+        position: createPosition(19, 1)
+      }
+    }
+  };
+
+  const result = queryTurnAffordances(prepared, "player-1");
+
+  assert.equal(result.stage, "mandatoryStep");
+  assert.equal(result.availableSecondaryActions.openTreasure, true);
+});
+
 test("turn affordances hide no-op normal rotations after the first move", () => {
   const match = createTwoPlayerMatchFixture({
     treasures: []

@@ -316,7 +316,7 @@ export function queryTurnAffordances(
         throwTile: false,
         rotateTiles: false,
         specialCard: false,
-        openTreasure: false,
+        openTreasure: tryCommand(() => openCarriedTreasure(match, playerId)),
         endTurn: false
       },
       availableSpecialCards: createDisabledSpecialCardRecord()

@@ -1,13 +1,15 @@
 import type { SpecialCardType } from "../../../packages/domain/src/index.ts";
 
+export type QuarterViewFacing = "front-rd" | "front-ld" | "back-ru" | "back-lu";
+
 const TILE_ICON_SOURCES: Readonly<Record<string, string | null>> = {
   plain: null,
-  fire: "/icons/tile-fire.svg",
-  water: "/icons/tile-water.svg",
-  electric: "/icons/tile-electric.svg",
-  ice: "/icons/tile-ice.svg",
-  giantFlame: "/icons/tile-giantFlame.svg",
-  river: "/icons/tile-river.svg"
+  fire: "/icons/tile-qv-fire.svg",
+  water: "/icons/tile-qv-water.svg",
+  electric: "/icons/tile-qv-electric.svg",
+  ice: "/icons/tile-qv-ice.svg",
+  giantFlame: "/icons/tile-qv-giantFlame.svg",
+  river: "/icons/tile-qv-river.svg"
 };
 
 const TREASURE_ICON_SOURCES: Readonly<Record<"closed" | "open", string>> = {
@@ -21,6 +23,9 @@ const PLAYER_ICON_SOURCES = [
   "/icons/player-seat-2.svg",
   "/icons/player-seat-3.svg"
 ] as const;
+
+const PLAYER_CHARACTER_IDS = [8, 5, 1, 4] as const;
+const PLAYER_SPRITE_ASSET_VERSION = "qv3";
 
 const SPECIAL_CARD_ICON_SOURCES: Readonly<Record<SpecialCardType, string>> = {
   coldBomb: "/icons/special-coldBomb.svg",
@@ -44,6 +49,11 @@ export function getTreasureIconSrc(opened: boolean): string {
 
 export function getPlayerIconSrc(seat: number): string {
   return PLAYER_ICON_SOURCES[seat % PLAYER_ICON_SOURCES.length] ?? PLAYER_ICON_SOURCES[0];
+}
+
+export function getPlayerSpriteSrc(seat: number, facing: QuarterViewFacing): string {
+  const characterId = PLAYER_CHARACTER_IDS[seat % PLAYER_CHARACTER_IDS.length] ?? PLAYER_CHARACTER_IDS[0];
+  return `/characters/quarterview/char${String(characterId).padStart(2, "0")}-${facing}.png?v=${PLAYER_SPRITE_ASSET_VERSION}`;
 }
 
 export function getSpecialCardIconSrc(cardType: SpecialCardType): string {

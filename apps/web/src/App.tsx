@@ -16,9 +16,11 @@ import {
 } from "./runtime-transport.ts";
 import {
   getPlayerIconSrc,
+  getPlayerSpriteSrc,
   getSpecialCardIconSrc,
   getTileIconSrc,
-  getTreasureIconSrc
+  getTreasureIconSrc,
+  type QuarterViewFacing
 } from "./ui-assets.ts";
 
 type RoomStatus = "lobby" | "started";
@@ -108,8 +110,11 @@ interface ProjectedSnapshot {
       } | null;
       auction: {
         currentOffer: { slot: number; cardType: SpecialCardType } | null;
+        currentOfferIndex: number;
+        totalOffers: number;
         resolvedOffers: Record<string, SpecialCardType | null>;
         hasSubmittedBid: boolean;
+        submittedPlayerIds: string[];
       };
     };
     completed: boolean;
@@ -214,6 +219,68 @@ interface PublicRoomEntry {
 }
 
 type OpenRoomsSort = "recent" | "players";
+
+const BOARD_COLUMNS = 20;
+const BOARD_ROWS = 20;
+const QUARTER_TILE_HEIGHT_RATIO = 0.58;
+
+function getQuarterViewMetrics(tileWidth: number) {
+  const tileHeight = tileWidth * QUARTER_TILE_HEIGHT_RATIO;
+  const topInset = tileWidth * 0.95;
+
+  return {
+    tileWidth,
+    tileHeight,
+    topInset,
+    boardWidth: tileWidth * BOARD_COLUMNS,
+    boardHeight: tileHeight * BOARD_ROWS + topInset
+  };
+}
+
+function getProjectedCellPosition(
+  x: number,
+  y: number,
+  tileWidth: number,
+  tileHeight: number,
+  topInset: number
+) {
+  return {
+    left: (x - y + (BOARD_ROWS - 1)) * (tileWidth / 2),
+    top: (x + y) * (tileHeight / 2) + topInset,
+    depth: x + y
+  };
+}
+
+function getFacingFromDirection(
+  direction: "north" | "east" | "south" | "west" | null
+): QuarterViewFacing | null {
+  switch (direction) {
+    case "north":
+      return "back-ru";
+    case "east":
+      return "front-rd";
+    case "south":
+      return "front-ld";
+    case "west":
+      return "back-lu";
+    default:
+      return null;
+  }
+}
+
+function getDefaultFacingForSeat(seat: number): QuarterViewFacing {
+  return (["front-rd", "front-ld", "back-ru", "back-lu"] as const)[seat % 4] ?? "front-rd";
+}
+
+function getPlayerFacing(snapshot: ProjectedSnapshot, playerId: string, seat: number): QuarterViewFacing {
+  const activeTurn = snapshot.state.round.turn;
+
+  if (activeTurn?.playerId === playerId) {
+    return getFacingFromDirection(activeTurn.mandatoryStepDirection) ?? getDefaultFacingForSeat(seat);
+  }
+
+  return getDefaultFacingForSeat(seat);
+}
 
 function formatRelativeMinutes(createdAt: string): string {
   const created = Date.parse(createdAt);
@@ -411,7 +478,7 @@ function formatTurnStage(stage: TurnStage | null): string {
     case "mandatoryStep":
       return "1칸 이동";
     case "secondaryAction":
-      return "+2 선택";
+      return "행동 선택";
     default:
       return "대기";
   }
@@ -475,6 +542,105 @@ function pendingActionLabel(pendingAction: PendingCellAction | null, snapshot: P
           }`
         : `${formatSpecialCardLabel(pendingAction.cardType)} 대상 선택`;
   }
+}
+
+function getPendingTreasureCard(
+  snapshot: ProjectedSnapshot | null,
+  pendingAction: PendingCellAction | null
+) {
+  if (!snapshot || pendingAction?.kind !== "treasurePlacement") {
+    return null;
+  }
+
+  return snapshot.viewer.treasurePlacementHand.find((candidate) => candidate.id === pendingAction.treasureId) ?? null;
+}
+
+function getNextTreasurePlacementCard(
+  snapshot: ProjectedSnapshot | null,
+  pendingAction: PendingCellAction | null
+) {
+  const pendingCard = getPendingTreasureCard(snapshot, pendingAction);
+
+  if (pendingCard && !pendingCard.isFake) {
+    return pendingCard;
+  }
+
+  return snapshot?.viewer.treasurePlacementHand.find((candidate) => !candidate.isFake) ?? null;
+}
+
+function getPriorityCalloutDetail(snapshot: ProjectedSnapshot): string {
+  const availableCount = snapshot.viewer.self.availablePriorityCards.length;
+  return `1-6 중 하나를 선택해 제출하세요. 현재 사용 가능한 우선권 카드 ${availableCount}장`;
+}
+
+function getTurnCalloutDetail(snapshot: ProjectedSnapshot): string {
+  const stage = snapshot.viewer.turnHints.stage;
+
+  if (stage === "mandatoryStep") {
+    return "먼저 1칸 이동한 뒤 추가 이동 또는 행동을 선택하세요.";
+  }
+
+  if (stage === "secondaryAction") {
+    return "이동, 타일, 회전, 특수카드, 보물 열기 중 가능한 행동을 선택할 수 있습니다.";
+  }
+
+  return "이번 턴의 행동을 시작하세요.";
+}
+
+function MatchPhaseCallout(props: {
+  snapshot: ProjectedSnapshot;
+  pendingAction: PendingCellAction | null;
+  visibleTurnAnnouncement: boolean;
+}) {
+  const treasureCard = getNextTreasurePlacementCard(props.snapshot, props.pendingAction);
+  const isTreasurePlacement = props.snapshot.state.round.phase === "treasurePlacement";
+  const isPrioritySubmission = props.snapshot.state.round.phase === "prioritySubmission";
+  const isTurnAnnouncement = props.visibleTurnAnnouncement && props.snapshot.state.round.phase === "inTurn";
+
+  if (!isTreasurePlacement && !isPrioritySubmission && !isTurnAnnouncement) {
+    return null;
+  }
+
+  if (isTreasurePlacement) {
+    return (
+      <section className="phase-callout phase-callout-treasure" data-testid="phase-callout">
+        <span className="phase-callout-kicker">Treasure Placement</span>
+        <div className="phase-callout-copy">
+          <strong>우클릭해서 보물을 배치하세요</strong>
+          <p>
+            {treasureCard && !treasureCard.isFake
+              ? `슬롯 ${treasureCard.slot} · ${formatPoints(treasureCard.points)} 보물 상자를 중앙 보물 구역에 놓으세요.`
+              : "남은 실보물 카드를 중앙 보물 구역에 모두 배치하면 다음 단계로 진행됩니다."}
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  if (isPrioritySubmission) {
+    return (
+      <section className="phase-callout phase-callout-priority" data-testid="phase-callout">
+        <span className="phase-callout-kicker">Priority Submission</span>
+        <div className="phase-callout-copy">
+          <strong>우선권 카드를 제출하세요</strong>
+          <p>{getPriorityCalloutDetail(props.snapshot)}</p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      className="phase-callout phase-callout-turn phase-callout-ephemeral"
+      data-testid="phase-callout"
+    >
+      <span className="phase-callout-kicker">Your Turn</span>
+      <div className="phase-callout-copy">
+        <strong>당신의 차례입니다</strong>
+        <p>{getTurnCalloutDetail(props.snapshot)}</p>
+      </div>
+    </section>
+  );
 }
 
 function ActionStatusStrip(props: {
@@ -731,7 +897,12 @@ function TreasureBoardStrip(props: { snapshot: ProjectedSnapshot }) {
             <div className="treasure-slot-figure" aria-hidden="true">
               {slot.opened ? (
                 <span className={`treasure-slot-open-frame ${openerSeatClass}`}>
-                  <span className="treasure-slot-open-shell" />
+                  <img
+                    className="treasure-slot-open-shell"
+                    src="/icons/treasure-open.svg"
+                    alt=""
+                    draggable="false"
+                  />
                   <img
                     className="treasure-slot-icon treasure-slot-icon-open"
                     src="/icons/treasure-gem.svg"
@@ -773,7 +944,6 @@ function PriorityCardButtons(props: {
             className={`priority-card ${isUsed ? "is-used" : ""}`}
             data-priority-card={card}
             disabled={
-              !props.isMyTurn ||
               props.snapshot.state.round.phase !== "prioritySubmission" ||
               isUsed
             }
@@ -903,6 +1073,9 @@ function AuctionOverlay(props: {
   onPurchaseLargeFence: () => void;
 }) {
   const currentOffer = props.snapshot.state.round.auction.currentOffer;
+  const submittedPlayerIds = new Set(props.snapshot.state.round.auction.submittedPlayerIds);
+  const submittedPlayers = props.snapshot.state.round.auction.submittedPlayerIds
+    .map((playerId) => props.snapshot.state.players[playerId]?.name ?? playerId);
 
   if (!currentOffer) {
     return null;
@@ -911,10 +1084,23 @@ function AuctionOverlay(props: {
   return (
     <div className="auction-overlay" data-testid="auction-overlay">
       <section className="auction-modal">
+        <div className="auction-callout" data-testid="auction-callout">
+          <span className="auction-round-pill" data-testid="auction-round-pill">
+            {props.snapshot.state.round.auction.currentOfferIndex + 1} / {props.snapshot.state.round.auction.totalOffers}
+          </span>
+          <div className="auction-callout-copy">
+            <strong>경매 진행 중</strong>
+            <small>모든 플레이어가 이번 경매를 제출하면 다음 카드가 공개됩니다.</small>
+          </div>
+        </div>
+
         <div className="auction-modal-copy">
           <span className="section-kicker">Special Auction</span>
           <h3>이번 경매 카드</h3>
-          <p>점수를 입찰해 특수카드를 확보하거나, 상시 구매 울타리류를 고를 수 있습니다.</p>
+          <p>
+            경매 {props.snapshot.state.round.auction.currentOfferIndex + 1} / {props.snapshot.state.round.auction.totalOffers}
+            . 점수를 입찰해 특수카드를 확보하거나, 상시 구매 울타리류를 고를 수 있습니다.
+          </p>
         </div>
 
         <div className="auction-modal-layout">
@@ -932,6 +1118,22 @@ function AuctionOverlay(props: {
 
           <div className="auction-controls">
             <div className="auction-bid-panel">
+              <div className="auction-progress-strip">
+                <strong>
+                  제출 {submittedPlayers.length} / {Object.keys(props.snapshot.state.players).length}
+                </strong>
+                <small>모든 플레이어가 제출하면 다음 카드가 공개됩니다.</small>
+                <div className="auction-submission-list">
+                  {Object.values(props.snapshot.state.players).map((player) => (
+                    <span
+                      key={player.id}
+                      className={`auction-submission-chip ${submittedPlayerIds.has(player.id) ? "is-submitted" : ""}`}
+                    >
+                      {player.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
               <label className="auction-input-label">
                 <span>내 입찰 점수</span>
                 <div className="auction-input-with-icon">
@@ -1009,6 +1211,7 @@ function AuctionOverlay(props: {
 function BoardView(props: {
   snapshot: ProjectedSnapshot;
   playerId: string;
+  tileWidth: number;
   highlightedCells: readonly { x: number; y: number }[];
   highlightTone: TurnStage | null;
   rotationMode: boolean;
@@ -1022,12 +1225,13 @@ function BoardView(props: {
 }) {
   const zone = props.snapshot.state.settings.rotationZone;
   const treasureZone = props.snapshot.state.settings.treasurePlacementZone;
+  const metrics = getQuarterViewMetrics(props.tileWidth);
 
   return (
-    <div className="board">
-      {Array.from({ length: 20 * 20 }, (_, index) => {
-        const x = index % 20;
-        const y = Math.floor(index / 20);
+    <div className="board board-quarterview" style={{ width: metrics.boardWidth, height: metrics.boardHeight }}>
+      {Array.from({ length: BOARD_COLUMNS * BOARD_ROWS }, (_, index) => {
+        const x = index % BOARD_COLUMNS;
+        const y = Math.floor(index / BOARD_COLUMNS);
         const key = `${x},${y}`;
         const tile = props.snapshot.state.board.tiles[key]?.kind ?? "";
         const players = Object.values(props.snapshot.state.players).filter(
@@ -1085,38 +1289,56 @@ function BoardView(props: {
                   ? "rotation-origin is-selected-rotation-origin"
                   : "rotation-origin"
                 : "";
+        const projected = getProjectedCellPosition(
+          x,
+          y,
+          metrics.tileWidth,
+          metrics.tileHeight,
+          metrics.topInset
+        );
 
         return (
-          <button
-            type="button"
+          <div
             key={key}
-            className={`cell tile-${tile || "plain"} ${inZone ? "in-zone" : ""} ${inTreasureZone ? "in-treasure-zone" : ""} ${zoneEdge} ${treasureZoneEdge} ${highlightClass}`}
+            className={`cell-anchor tile-${tile || "plain"} ${inZone ? "in-zone" : ""} ${inTreasureZone ? "in-treasure-zone" : ""} ${zoneEdge} ${treasureZoneEdge} ${highlightClass}`}
             data-cell={key}
-            aria-label={`${key}${tile ? ` ${tile}` : ""}${players.length > 0 ? ` ${players.map((player) => player.name).join(", ")}` : ""}${treasures.length > 0 ? ` ${treasures.length} treasure(s)` : ""}`}
-            title={`${key}${tile ? ` · ${tile}` : ""}`}
-            onClick={(event) => {
-              if (!props.rotationMode || !isRotationOrigin) {
-                return;
-              }
-
-              props.onRotationCellSelect(event, { x, y });
+            style={{
+              left: projected.left,
+              top: projected.top,
+              zIndex: projected.depth + 1
             }}
-            onMouseEnter={() => {
-              if (!props.rotationMode || !isRotationOrigin) {
-                return;
-              }
-
-              props.onRotationCellHover({ x, y });
-            }}
-            onMouseLeave={() => {
-              if (!props.rotationMode) {
-                return;
-              }
-
-              props.onRotationCellHover(null);
-            }}
-            onContextMenu={(event) => props.onCellContextMenu(event, { x, y })}
           >
+            <button
+              type="button"
+              className="cell-hit"
+              data-cell={key}
+              aria-label={`${key}${tile ? ` ${tile}` : ""}${players.length > 0 ? ` ${players.map((player) => player.name).join(", ")}` : ""}${treasures.length > 0 ? ` ${treasures.length} treasure(s)` : ""}`}
+              title={`${key}${tile ? ` · ${tile}` : ""}`}
+              onClick={(event) => {
+                if (!props.rotationMode || !isRotationOrigin) {
+                  return;
+                }
+
+                props.onRotationCellSelect(event, { x, y });
+              }}
+              onMouseEnter={() => {
+                if (!props.rotationMode || !isRotationOrigin) {
+                  return;
+                }
+
+                props.onRotationCellHover({ x, y });
+              }}
+              onMouseLeave={() => {
+                if (!props.rotationMode) {
+                  return;
+                }
+
+                props.onRotationCellHover(null);
+              }}
+              onContextMenu={(event) => props.onCellContextMenu(event, { x, y })}
+            />
+            <span className="cell-shadow" aria-hidden="true" />
+            <span className="cell-surface" aria-hidden="true" />
             {isHighlighted ? (
               <span className={`hint-badge ${props.highlightTone === "mandatoryStep" ? "hint-step" : "hint-action"}`}>
                 {props.highlightTone === "mandatoryStep" ? "1" : "+2"}
@@ -1144,20 +1366,21 @@ function BoardView(props: {
               {players.map((player) => (
                 <span
                   key={player.id}
-                  className={`player-marker ${player.id === props.playerId ? "is-self" : ""} ${player.id === props.snapshot.state.round.activePlayerId ? "is-active" : ""}`}
+                  className={`player-marker ${player.id === props.playerId ? "is-self" : ""} ${player.id === props.snapshot.state.round.activePlayerId ? "is-active is-walking" : ""}`}
                   data-seat={player.seat}
                   title={player.name}
                 >
+                  <span className="player-shadow" aria-hidden="true" />
                   <img
-                    className="asset-icon player-icon"
-                    src={getPlayerIconSrc(player.seat)}
+                    className="asset-icon player-character"
+                    src={getPlayerSpriteSrc(player.seat, getPlayerFacing(props.snapshot, player.id, player.seat))}
                     alt=""
                     draggable="false"
                   />
                 </span>
               ))}
             </span>
-          </button>
+          </div>
         );
       })}
     </div>
@@ -1189,10 +1412,9 @@ export function App() {
   const [selectedRotationOrigin, setSelectedRotationOrigin] = useState<{ x: number; y: number } | null>(null);
   const [hoveredRotationOrigin, setHoveredRotationOrigin] = useState<{ x: number; y: number } | null>(null);
   const [boardViewportSize, setBoardViewportSize] = useState<number | null>(null);
+  const [showTurnAnnouncement, setShowTurnAnnouncement] = useState(false);
   const boardStageRef = useRef<HTMLElement | null>(null);
-  const boardHeaderRef = useRef<HTMLDivElement | null>(null);
-  const boardActionStripRef = useRef<HTMLDivElement | null>(null);
-  const resultBoxRef = useRef<HTMLDivElement | null>(null);
+  const lastTurnAnnouncementKeyRef = useRef<string | null>(null);
 
   const me = snapshot?.viewer.self ?? null;
   const publicSelf = snapshot ? snapshot.state.players[playerId] : null;
@@ -1234,29 +1456,23 @@ export function App() {
         const stageStyle = window.getComputedStyle(stage);
         const paddingX = Number.parseFloat(stageStyle.paddingLeft) + Number.parseFloat(stageStyle.paddingRight);
         const paddingY = Number.parseFloat(stageStyle.paddingTop) + Number.parseFloat(stageStyle.paddingBottom);
-        const rowGap = Number.parseFloat(stageStyle.rowGap || stageStyle.gap || "0");
-        const chrome = [boardHeaderRef.current, boardActionStripRef.current, resultBoxRef.current].filter(
-          (element): element is NonNullable<typeof element> => element !== null
-        );
-        const chromeHeight = chrome.reduce((total, element) => total + element.offsetHeight, 0);
         const availableWidth = Math.max(240, stageRect.width - paddingX);
-        const availableHeight = Math.max(
-          240,
-          stageRect.height - paddingY - chromeHeight - rowGap * chrome.length
+        const availableHeight = Math.max(240, stageRect.height - paddingY);
+        const nextSize = Math.max(
+          18,
+          Math.floor(
+            Math.min(
+              availableWidth / BOARD_COLUMNS,
+              availableHeight / (BOARD_ROWS * QUARTER_TILE_HEIGHT_RATIO + 0.95)
+            )
+          )
         );
-        const nextSize = Math.floor(Math.min(availableWidth, availableHeight));
 
         setBoardViewportSize((current) => (current === nextSize ? current : nextSize));
       });
     });
 
     resizeObserver.observe(stage);
-
-    for (const element of [boardHeaderRef.current, boardActionStripRef.current, resultBoxRef.current]) {
-      if (element) {
-        resizeObserver.observe(element);
-      }
-    }
 
     return () => {
       cancelAnimationFrame(animationFrame);
@@ -1440,6 +1656,35 @@ export function App() {
       setSelectedRotationOrigin(null);
     }
   }, [snapshot, selectedRotationOrigin]);
+
+  useEffect(() => {
+    if (!snapshot || snapshot.state.round.phase !== "inTurn" || !isMyTurn || !snapshot.state.round.activePlayerId) {
+      setShowTurnAnnouncement(false);
+      return;
+    }
+
+    const nextKey = `${snapshot.state.round.roundNumber}:${snapshot.state.round.activePlayerId}:${snapshot.state.round.turn?.playerId ?? "none"}`;
+
+    if (lastTurnAnnouncementKeyRef.current === nextKey) {
+      return;
+    }
+
+    lastTurnAnnouncementKeyRef.current = nextKey;
+    setShowTurnAnnouncement(true);
+
+    const timeoutId = window.setTimeout(() => {
+      setShowTurnAnnouncement(false);
+    }, 3000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    isMyTurn,
+    snapshot,
+    snapshot?.state.round.activePlayerId,
+    snapshot?.state.round.phase,
+    snapshot?.state.round.roundNumber,
+    snapshot?.state.round.turn?.playerId
+  ]);
 
   async function createRoom() {
     try {
@@ -1986,7 +2231,18 @@ export function App() {
   }
 
   return (
-    <main className="app-shell" data-screen="match">
+    <main
+      className="app-shell"
+      data-screen="match"
+      data-has-turn-order-bridge={
+        snapshot &&
+        (snapshot.state.round.turnOrder.length > 0 ||
+          snapshot.state.round.phase === "inTurn" ||
+          snapshot.state.round.phase === "completed")
+          ? "true"
+          : "false"
+      }
+    >
       <header className="top-strip">
         <div className="title-row">
           <p className="eyebrow">Project. BH</p>
@@ -2022,11 +2278,14 @@ export function App() {
             className="board-stage match-main"
             style={
               boardViewportSize
-                ? ({ "--board-size": `${boardViewportSize}px` } as CSSProperties)
+                ? ({
+                    "--tile-width": `${boardViewportSize}px`,
+                    "--tile-height": `${boardViewportSize * QUARTER_TILE_HEIGHT_RATIO}px`
+                  } as CSSProperties)
                 : undefined
             }
           >
-          <div ref={boardHeaderRef} className="board-header">
+          <div className="board-header">
             <div className="board-meta">
               <span>Goal {snapshot.state.settings.roundOpenTreasureTarget}</span>
               <span>
@@ -2053,26 +2312,18 @@ export function App() {
             </div>
           </div>
 
-          {snapshot.state.round.phase === "inTurn" || snapshot.state.round.phase === "prioritySubmission" ? (
-            <div ref={boardActionStripRef}>
-              <ActionStatusStrip
-                snapshot={snapshot}
-                isMyTurn={Boolean(isMyTurn)}
-                rotationMode={interactionMode === "rotate"}
-                onToggleRotationMode={() => {
-                  setContextMenu(null);
-                  setSelectedRotationOrigin(null);
-                  setHoveredRotationOrigin(null);
-                  setInteractionMode((current) => (current === "rotate" ? null : "rotate"));
-                  setMessage("");
-                }}
-              />
-            </div>
-          ) : null}
+          <div className="board-phase-callout-wrap">
+            <MatchPhaseCallout
+              snapshot={snapshot}
+              pendingAction={pendingAction}
+              visibleTurnAnnouncement={showTurnAnnouncement}
+            />
+          </div>
 
           <BoardView
             snapshot={snapshot}
             playerId={playerId}
+            tileWidth={boardViewportSize ?? 28}
             highlightedCells={highlightedCells}
             highlightTone={snapshot.viewer.turnHints.stage}
             rotationMode={interactionMode === "rotate"}
@@ -2126,13 +2377,30 @@ export function App() {
           ) : null}
 
           {snapshot.state.result ? (
-            <div ref={resultBoxRef} className="result-box">
+            <div className="result-box">
               Winners: {snapshot.state.result.winnerPlayerIds.join(", ")} | Score: {snapshot.state.result.highestScore}
             </div>
           ) : null}
           </section>
 
           <footer className="bottom-overlay match-footer">
+            {snapshot.state.round.phase === "inTurn" || snapshot.state.round.phase === "prioritySubmission" ? (
+              <section className="overlay-section footer-action-status">
+                <ActionStatusStrip
+                  snapshot={snapshot}
+                  isMyTurn={Boolean(isMyTurn)}
+                  rotationMode={interactionMode === "rotate"}
+                  onToggleRotationMode={() => {
+                    setContextMenu(null);
+                    setSelectedRotationOrigin(null);
+                    setHoveredRotationOrigin(null);
+                    setInteractionMode((current) => (current === "rotate" ? null : "rotate"));
+                    setMessage("");
+                  }}
+                />
+              </section>
+            ) : null}
+
             <section className="overlay-section inventory-section">
               <div className="inventory-group inventory-group-priority">
                 <h3>Priority Cards</h3>

@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createMatchState, createPosition, placeTreasure, type MatchState } from "../../../packages/domain/src/index.ts";
+import {
+  createMatchState,
+  createPosition,
+  placeTreasure,
+  submitAuctionBids,
+  type MatchState
+} from "../../../packages/domain/src/index.ts";
 
 import { projectSnapshotForPlayer } from "./client-state-projector.ts";
 
@@ -113,4 +119,24 @@ test("only the treasure opener receives the revealed treasure card details", () 
     projectedForOpener.state.treasureBoard.slots.find((slot) => slot.slot === 1)?.opened,
     true
   );
+});
+
+test("player projection exposes public auction progress without bid amounts", () => {
+  const match = createMatchState({
+    matchId: "match-auction-progress",
+    players: [
+      { id: "player-1", name: "Alpha" },
+      { id: "player-2", name: "Bravo" }
+    ],
+    treasures: []
+  });
+  const afterFirstBid = submitAuctionBids(match, "player-1", [{ offerSlot: 0, amount: 1 }]).state;
+
+  const projectedForPlayerTwo = projectSnapshotForPlayer(createSnapshot(afterFirstBid), "player-2");
+
+  assert.equal(projectedForPlayerTwo.state.round.phase, "auction");
+  assert.equal(projectedForPlayerTwo.state.round.auction.currentOfferIndex, 0);
+  assert.equal(projectedForPlayerTwo.state.round.auction.totalOffers, 4);
+  assert.deepEqual(projectedForPlayerTwo.state.round.auction.submittedPlayerIds, ["player-1"]);
+  assert.equal("submittedBids" in projectedForPlayerTwo.state.round.auction, false);
 });

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 72" fill="none">
+  <defs>
+    <radialGradient id="waterGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(48 42) rotate(90) scale(22 34)">
+      <stop stop-color="#EFFFFF" stop-opacity="0.94"/>
+      <stop offset="0.65" stop-color="#76C8FF" stop-opacity="0.62"/>
+      <stop offset="1" stop-color="#2A72B5" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="drop" x1="48" y1="18" x2="48" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F2FDFF"/>
+      <stop offset="1" stop-color="#95DFFF"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="48" cy="43" rx="30" ry="12" fill="url(#waterGlow)"/>
+  <path d="M48 18c5 7 14 17 14 25a14 14 0 1 1-28 0c0-8 9-18 14-25Z" fill="url(#drop)"/>
+  <path d="M27 51c5-2 10-3 15-3 7 0 10 2 16 3 5 1 9 1 11 0-1 5-8 10-21 10-12 0-20-5-21-10Z" fill="#EDF9FF" opacity="0.7"/>
+</svg>
