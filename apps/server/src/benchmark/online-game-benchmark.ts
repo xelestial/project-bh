@@ -18,8 +18,11 @@ export interface OnlineGameBenchmarkOptions {
   readonly rooms: number;
   readonly playersPerRoom: number;
   readonly commandsPerRoom: number;
+  readonly selectorReadsPerRoom?: number;
+  readonly reconnectAttemptsPerRoom?: number;
   readonly useWebSockets: boolean;
   readonly outputJsonlPath: string | null;
+  readonly metricTags?: Readonly<Record<string, string>>;
 }
 
 export interface OnlineGameBenchmarkResult {
@@ -42,6 +45,94 @@ interface StartedRoomResponse {
   readonly snapshot: ProjectedMatchSnapshot;
 }
 
+export type OnlineBenchmarkProfileId =
+  | "selector-latency"
+  | "reconnect-latency"
+  | "multi-room-redis-stream-throughput";
+
+export interface OnlineBenchmarkProfile {
+  readonly id: OnlineBenchmarkProfileId;
+  readonly description: string;
+  readonly options: Omit<OnlineGameBenchmarkOptions, "outputJsonlPath">;
+}
+
+const ONLINE_BENCHMARK_PROFILES: readonly OnlineBenchmarkProfile[] = [
+  {
+    id: "selector-latency",
+    description: "Measures repeated selector-projected room refresh latency across active rooms.",
+    options: {
+      rooms: 8,
+      playersPerRoom: 4,
+      commandsPerRoom: 1,
+      selectorReadsPerRoom: 12,
+      reconnectAttemptsPerRoom: 0,
+      useWebSockets: false,
+      metricTags: {
+        profile: "selector-latency",
+        focus: "selector"
+      }
+    }
+  },
+  {
+    id: "reconnect-latency",
+    description: "Measures authenticated room refresh latency as the reconnect recovery path.",
+    options: {
+      rooms: 8,
+      playersPerRoom: 4,
+      commandsPerRoom: 1,
+      selectorReadsPerRoom: 2,
+      reconnectAttemptsPerRoom: 8,
+      useWebSockets: false,
+      metricTags: {
+        profile: "reconnect-latency",
+        focus: "reconnect"
+      }
+    }
+  },
+  {
+    id: "multi-room-redis-stream-throughput",
+    description: "Stresses many rooms and queued commands for Redis stream throughput checks.",
+    options: {
+      rooms: 24,
+      playersPerRoom: 4,
+      commandsPerRoom: 4,
+      selectorReadsPerRoom: 2,
+      reconnectAttemptsPerRoom: 2,
+      useWebSockets: true,
+      metricTags: {
+        profile: "multi-room-redis-stream-throughput",
+        focus: "runtime-streams",
+        runtimeStore: "redis"
+      }
+    }
+  }
+];
+
+export function getOnlineBenchmarkProfiles(): readonly OnlineBenchmarkProfile[] {
+  return ONLINE_BENCHMARK_PROFILES;
+}
+
+export function createOnlineBenchmarkOptionsFromProfile(
+  profileId: OnlineBenchmarkProfileId,
+  overrides: Partial<OnlineGameBenchmarkOptions> = {}
+): OnlineGameBenchmarkOptions {
+  const profile = ONLINE_BENCHMARK_PROFILES.find((candidate) => candidate.id === profileId);
+
+  if (!profile) {
+    throw new Error(`Unknown online benchmark profile: ${profileId}`);
+  }
+
+  return {
+    ...profile.options,
+    ...overrides,
+    outputJsonlPath: overrides.outputJsonlPath ?? null,
+    metricTags: {
+      ...profile.options.metricTags,
+      ...overrides.metricTags
+    }
+  };
+}
+
 function createMetric(
   name: string,
   value: number,
@@ -61,11 +152,15 @@ async function measure<TValue>(
   metrics: BenchmarkMetric[],
   name: string,
   tags: Readonly<Record<string, string>>,
+  baseTags: Readonly<Record<string, string>>,
   operation: () => Promise<TValue>
 ): Promise<TValue> {
   const start = performance.now();
   const value = await operation();
-  metrics.push(createMetric(name, performance.now() - start, "ms", tags));
+  metrics.push(createMetric(name, performance.now() - start, "ms", {
+    ...baseTags,
+    ...tags
+  }));
   return value;
 }
 
@@ -80,6 +175,16 @@ async function postJson<TValue>(
     },
     body: JSON.stringify(body)
   });
+
+  if (!response.ok) {
+    throw new Error(`Benchmark request failed: ${response.status} ${url}`);
+  }
+
+  return (await response.json()) as TValue;
+}
+
+async function getJson<TValue>(url: string): Promise<TValue> {
+  const response = await fetch(url);
 
   if (!response.ok) {
     throw new Error(`Benchmark request failed: ${response.status} ${url}`);
@@ -107,6 +212,7 @@ export async function runOnlineGameBenchmark(
   const server = await startHttpServer({ port: 0, host: "127.0.0.1" });
   const baseUrl = `http://${server.host}:${server.port}`;
   const sockets: WebSocket[] = [];
+  const metricTags = options.metricTags ?? {};
 
   try {
     const hosts: RoomResponse[] = [];
@@ -117,6 +223,7 @@ export async function runOnlineGameBenchmark(
         metrics,
         "room.create.latencyMs",
         { roomIndex: String(roomIndex) },
+        metricTags,
         () =>
           postJson<RoomResponse>(`${baseUrl}/api/rooms`, {
             name: `Host ${roomIndex}`,
@@ -135,6 +242,7 @@ export async function runOnlineGameBenchmark(
             roomIndex: String(roomIndex),
             playerIndex: String(playerIndex)
           },
+          metricTags,
           () =>
             postJson<RoomResponse>(
               `${baseUrl}/api/invite/${host.room.inviteCode}/join`,
@@ -159,12 +267,45 @@ export async function runOnlineGameBenchmark(
         metrics,
         "room.start.latencyMs",
         { roomIndex: String(roomIndex) },
+        metricTags,
         () =>
           postJson<StartedRoomResponse>(
             `${baseUrl}/api/rooms/${host.room.roomId}/start`,
             { sessionToken: host.sessionToken }
           )
       );
+
+      for (let readIndex = 0; readIndex < (options.selectorReadsPerRoom ?? 0); readIndex += 1) {
+        await measure(
+          metrics,
+          "selector.snapshot.latencyMs",
+          {
+            roomIndex: String(roomIndex),
+            readIndex: String(readIndex)
+          },
+          metricTags,
+          () =>
+            getJson(
+              `${baseUrl}/api/rooms/${host.room.roomId}?sessionToken=${encodeURIComponent(host.sessionToken)}`
+            )
+        );
+      }
+
+      for (let reconnectIndex = 0; reconnectIndex < (options.reconnectAttemptsPerRoom ?? 0); reconnectIndex += 1) {
+        await measure(
+          metrics,
+          "reconnect.hydrate.latencyMs",
+          {
+            roomIndex: String(roomIndex),
+            reconnectIndex: String(reconnectIndex)
+          },
+          metricTags,
+          () =>
+            getJson(
+              `${baseUrl}/api/rooms/${host.room.roomId}?sessionToken=${encodeURIComponent(host.sessionToken)}`
+            )
+        );
+      }
 
       for (let commandIndex = 0; commandIndex < options.commandsPerRoom; commandIndex += 1) {
         const offerSlot =
@@ -176,6 +317,7 @@ export async function runOnlineGameBenchmark(
             roomIndex: String(roomIndex),
             commandIndex: String(commandIndex)
           },
+          metricTags,
           () =>
             postJson(`${baseUrl}/api/rooms/${host.room.roomId}/commands`, {
               commandId: `benchmark-${roomIndex}-${commandIndex}`,
@@ -191,9 +333,9 @@ export async function runOnlineGameBenchmark(
       }
     }
 
-    metrics.push(createMetric("rooms.created", hosts.length, "count"));
-    metrics.push(createMetric("players.joined", playersJoined, "count"));
-    metrics.push(createMetric("commands.sent", commandsSent, "count"));
+    metrics.push(createMetric("rooms.created", hosts.length, "count", metricTags));
+    metrics.push(createMetric("players.joined", playersJoined, "count", metricTags));
+    metrics.push(createMetric("commands.sent", commandsSent, "count", metricTags));
     await writeMetricsJsonl(options.outputJsonlPath, metrics);
 
     return {
@@ -212,13 +354,22 @@ export async function runOnlineGameBenchmark(
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const result = await runOnlineGameBenchmark({
-    rooms: Number.parseInt(process.env.BH_BENCH_ROOMS ?? "100", 10),
-    playersPerRoom: Number.parseInt(process.env.BH_BENCH_PLAYERS ?? "4", 10),
-    commandsPerRoom: Number.parseInt(process.env.BH_BENCH_COMMANDS ?? "1", 10),
-    useWebSockets: process.env.BH_BENCH_WEBSOCKETS === "true",
-    outputJsonlPath: process.env.BH_BENCH_OUTPUT ?? null
-  });
+  const profileId = process.env.BH_BENCH_PROFILE as OnlineBenchmarkProfileId | undefined;
+  const result = await runOnlineGameBenchmark(
+    profileId
+      ? createOnlineBenchmarkOptionsFromProfile(profileId, {
+          outputJsonlPath: process.env.BH_BENCH_OUTPUT ?? null
+        })
+      : {
+          rooms: Number.parseInt(process.env.BH_BENCH_ROOMS ?? "100", 10),
+          playersPerRoom: Number.parseInt(process.env.BH_BENCH_PLAYERS ?? "4", 10),
+          commandsPerRoom: Number.parseInt(process.env.BH_BENCH_COMMANDS ?? "1", 10),
+          selectorReadsPerRoom: Number.parseInt(process.env.BH_BENCH_SELECTOR_READS ?? "0", 10),
+          reconnectAttemptsPerRoom: Number.parseInt(process.env.BH_BENCH_RECONNECTS ?? "0", 10),
+          useWebSockets: process.env.BH_BENCH_WEBSOCKETS === "true",
+          outputJsonlPath: process.env.BH_BENCH_OUTPUT ?? null
+        }
+  );
 
   console.log(JSON.stringify(result, null, 2));
 }

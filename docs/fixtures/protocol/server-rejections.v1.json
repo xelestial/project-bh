@@ -1,0 +1,27 @@
+{
+  "catalogId": "project-bh.protocol.server-rejections.v1",
+  "version": 1,
+  "description": "Stable rejection code samples for Unity command error handling.",
+  "rejections": [
+    {
+      "code": "INVALID_SESSION_TOKEN",
+      "message": "The provided session token is invalid for this room.",
+      "surface": "transport-auth"
+    },
+    {
+      "code": "INVALID_COMMAND_PAYLOAD",
+      "message": "Command payload failed schema validation.",
+      "surface": "protocol"
+    },
+    {
+      "code": "NOT_ACTIVE_PLAYER",
+      "message": "Only the active player can perform this command.",
+      "surface": "domain"
+    },
+    {
+      "code": "INVALID_ROTATION_SELECTION",
+      "message": "The chosen rotation selection is invalid or out of bounds.",
+      "surface": "domain"
+    }
+  ]
+}

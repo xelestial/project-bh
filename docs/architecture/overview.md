@@ -82,7 +82,8 @@ The current baseline now covers:
 
 ## Near-term build order
 
-1. Add deeper benchmark profiles for selector latency, reconnect latency, and multi-room Redis stream throughput.
+1. Add visual browser assertions for priority inventory, turn-order chips, move highlights, and overlay state.
+2. Add resolved scenario fixtures for more special-card combinations as rules stabilize.
 
 The more detailed sequence now lives in `docs/planning/implementation-roadmap.md`.
 

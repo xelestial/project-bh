@@ -1,0 +1,25 @@
+{
+  "streamId": "project-bh.runtime.redis-event-stream.v1",
+  "version": 1,
+  "redisStream": "bh:session:session-runtime-sample:events",
+  "entries": [
+    {
+      "id": "1-0",
+      "payload": {
+        "commandId": "command-runtime-1",
+        "roomId": "room-runtime-sample",
+        "revision": 1,
+        "eventTypes": ["prioritySubmitted"]
+      }
+    },
+    {
+      "id": "2-0",
+      "payload": {
+        "commandId": "command-runtime-2",
+        "roomId": "room-runtime-sample",
+        "revision": 2,
+        "eventTypes": ["prioritySubmitted", "roundStarted"]
+      }
+    }
+  ]
+}

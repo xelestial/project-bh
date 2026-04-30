@@ -23,7 +23,17 @@ test("Unity parity asset catalog references checked-in fixture files", () => {
   assert.equal(catalog.catalogId, "project-bh.unity-parity.asset-catalog.v1");
   assert.equal(catalog.version, 1);
   assert.equal(catalog.generatedFor, "unity-parity");
-  assert.ok(catalog.assets.length >= 12);
+  assert.ok(catalog.assets.length >= 19);
+
+  const requiredAssetIds = new Set([
+    "scenario.auction-special-card-flow",
+    "projection.charged-inventory-hud",
+    "protocol.snapshot-sample",
+    "protocol.server-rejection-catalog",
+    "security.reconnect-token-contract",
+    "runtime.redis-command-stream",
+    "runtime.redis-event-stream"
+  ]);
 
   const ids = new Set<string>();
 
@@ -33,5 +43,8 @@ test("Unity parity asset catalog references checked-in fixture files", () => {
     assert.ok(asset.path.startsWith("docs/fixtures/"), `Unexpected parity fixture path: ${asset.path}`);
     assert.ok(asset.consumer.length > 0, `Asset ${asset.id} needs at least one consumer.`);
     assert.equal(existsSync(new URL(asset.path, REPO_ROOT)), true, `Missing fixture file: ${asset.path}`);
+    requiredAssetIds.delete(asset.id);
   }
+
+  assert.deepEqual([...requiredAssetIds], []);
 });

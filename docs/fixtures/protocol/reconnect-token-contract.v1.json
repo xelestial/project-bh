@@ -1,0 +1,22 @@
+{
+  "contractId": "project-bh.security.reconnect-token-contract.v1",
+  "version": 1,
+  "description": "Reconnect token contract sample. No plaintext session token is stored in fixtures.",
+  "token": {
+    "plaintextExample": "<redacted>",
+    "format": "base64url",
+    "minimumEntropyBits": 256,
+    "logRepresentation": "sess_****",
+    "storage": {
+      "algorithm": "HMAC-SHA256",
+      "storedField": "sessionTokenHash",
+      "plaintextPersisted": false
+    }
+  },
+  "binding": {
+    "roomId": "room-token-sample",
+    "playerId": "player-1",
+    "serverResolvesPlayerIdentity": true,
+    "clientSuppliedPlayerIdTrusted": false
+  }
+}

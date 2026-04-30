@@ -1,0 +1,56 @@
+{
+  "projectionId": "project-bh.projection.charged-inventory-hud.v1",
+  "version": 1,
+  "description": "HUD-facing charged special-card sample derived from viewer-private inventory plus turn-hint availability.",
+  "input": {
+    "viewerPlayerId": "player-1",
+    "turnStage": "secondaryAction",
+    "specialInventory": {
+      "coldBomb": 0,
+      "flameBomb": 0,
+      "electricBomb": 0,
+      "largeHammer": 1,
+      "fence": 2,
+      "largeFence": 0,
+      "recoveryPotion": 1,
+      "jump": 0,
+      "hook": 0
+    },
+    "availableSpecialCards": {
+      "coldBomb": false,
+      "flameBomb": false,
+      "electricBomb": false,
+      "largeHammer": true,
+      "fence": true,
+      "largeFence": false,
+      "recoveryPotion": true,
+      "jump": false,
+      "hook": false
+    }
+  },
+  "output": {
+    "buttons": [
+      {
+        "cardType": "largeHammer",
+        "label": "대형 망치",
+        "chargeCount": 1,
+        "available": true,
+        "directUse": false
+      },
+      {
+        "cardType": "fence",
+        "label": "울타리",
+        "chargeCount": 2,
+        "available": true,
+        "directUse": false
+      },
+      {
+        "cardType": "recoveryPotion",
+        "label": "회복제",
+        "chargeCount": 1,
+        "available": true,
+        "directUse": true
+      }
+    ]
+  }
+}

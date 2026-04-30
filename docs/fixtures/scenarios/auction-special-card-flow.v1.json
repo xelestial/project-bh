@@ -1,0 +1,51 @@
+{
+  "scenarioId": "project-bh.scenario.auction-special-card-flow.v1",
+  "version": 1,
+  "description": "Auction flow sample covering sequential card reveal, fence buyout, large hammer award, and charged inventory updates.",
+  "input": {
+    "matchId": "match-auction-special-card-sample",
+    "players": ["player-1", "player-2"],
+    "auctionOffers": [
+      { "slot": 1, "cardType": "coldBomb" },
+      { "slot": 2, "cardType": "flameBomb" },
+      { "slot": 3, "cardType": "electricBomb" },
+      { "slot": 4, "cardType": "largeHammer" }
+    ],
+    "directPurchase": {
+      "playerId": "player-1",
+      "cardType": "fence",
+      "cost": 1
+    },
+    "bids": [
+      {
+        "offerSlot": 4,
+        "playerId": "player-1",
+        "amount": 2
+      },
+      {
+        "offerSlot": 4,
+        "playerId": "player-2",
+        "amount": 0
+      }
+    ]
+  },
+  "output": {
+    "revealedOfferOrder": ["coldBomb", "flameBomb", "electricBomb", "largeHammer"],
+    "playerInventoryDelta": {
+      "player-1": {
+        "fence": 3,
+        "largeHammer": 3
+      }
+    },
+    "scoreDelta": {
+      "player-1": -3
+    },
+    "eventTypes": [
+      "specialCardPurchased",
+      "auctionBidSubmitted",
+      "auctionBidSubmitted",
+      "specialCardAwarded",
+      "auctionResolved"
+    ]
+  }
+}

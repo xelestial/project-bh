@@ -1,4 +1,5 @@
 import type {
+  PriorityCard,
   RoundPhase,
   SpecialCardType
 } from "../../../packages/domain/src/index.ts";
@@ -44,6 +45,29 @@ export interface SpecialCardButtonModel {
   readonly disabled: boolean;
   readonly selected: boolean;
   readonly directUse: boolean;
+}
+
+export interface PriorityInventoryCardModel {
+  readonly priorityCard: PriorityCard;
+  readonly label: string;
+  readonly disabled: boolean;
+  readonly submitted: boolean;
+}
+
+export interface TurnOrderChipModel {
+  readonly playerId: string;
+  readonly label: string;
+  readonly active: boolean;
+  readonly self: boolean;
+  readonly eliminated: boolean;
+  readonly order: number;
+}
+
+export interface MoveOverlayState {
+  readonly highlightedCells: readonly { readonly x: number; readonly y: number }[];
+  readonly highlightTone: TurnStage | null;
+  readonly rotationOrigins: readonly { readonly x: number; readonly y: number }[];
+  readonly rotationPreviewCells: readonly { readonly x: number; readonly y: number }[];
 }
 
 const SPECIAL_CARD_LABELS: Readonly<Record<SpecialCardType, string>> = {
@@ -190,4 +214,155 @@ export function buildSpecialCardButtonModels(input: {
         directUse: cardType === "recoveryPotion"
       };
     });
+}
+
+export function buildPriorityInventoryCardModels(input: {
+  readonly availablePriorityCards: readonly PriorityCard[];
+  readonly phase: RoundPhase;
+  readonly isMyTurn: boolean;
+  readonly submittedPriorityCard: PriorityCard | null;
+}): readonly PriorityInventoryCardModel[] {
+  const availableCards = new Set(input.availablePriorityCards);
+
+  return input.availablePriorityCards
+    .slice()
+    .sort((left, right) => left - right)
+    .map((priorityCard) => {
+      const submitted = input.submittedPriorityCard === priorityCard;
+
+      return {
+        priorityCard,
+        label: String(priorityCard),
+        disabled:
+          input.phase !== "prioritySubmission" ||
+          !input.isMyTurn ||
+          !availableCards.has(priorityCard) ||
+          submitted,
+        submitted
+      };
+    });
+}
+
+export function buildTurnOrderChipModels(input: {
+  readonly turnOrder: readonly string[];
+  readonly activePlayerId: string | null;
+  readonly viewerPlayerId: string;
+  readonly players: Readonly<Record<string, { readonly name: string; readonly eliminated: boolean }>>;
+}): readonly TurnOrderChipModel[] {
+  return input.turnOrder.map((playerId, index) => {
+    const player = input.players[playerId];
+
+    return {
+      playerId,
+      label: player?.name ?? playerId,
+      active: input.activePlayerId === playerId,
+      self: input.viewerPlayerId === playerId,
+      eliminated: player?.eliminated ?? false,
+      order: index + 1
+    };
+  });
+}
+
+export function getSquare2PreviewCells(
+  origin: { readonly x: number; readonly y: number } | null
+): readonly { readonly x: number; readonly y: number }[] {
+  if (!origin) {
+    return [];
+  }
+
+  return [
+    origin,
+    { x: origin.x + 1, y: origin.y },
+    { x: origin.x, y: origin.y + 1 },
+    { x: origin.x + 1, y: origin.y + 1 }
+  ];
+}
+
+export function buildMoveOverlayState(input: {
+  readonly interactionMode: "rotate" | null;
+  readonly turnHints: PlaytestTurnHints | null;
+  readonly rotationPreviewOrigin?: { readonly x: number; readonly y: number } | null;
+}): MoveOverlayState {
+  if (!input.turnHints) {
+    return {
+      highlightedCells: [],
+      highlightTone: null,
+      rotationOrigins: [],
+      rotationPreviewCells: []
+    };
+  }
+
+  if (input.interactionMode === "rotate") {
+    return {
+      highlightedCells: [],
+      highlightTone: input.turnHints.stage,
+      rotationOrigins: input.turnHints.rotationOrigins,
+      rotationPreviewCells: getSquare2PreviewCells(input.rotationPreviewOrigin ?? null)
+    };
+  }
+
+  return {
+    highlightedCells:
+      input.turnHints.stage === "mandatoryStep"
+        ? input.turnHints.mandatoryMoveTargets
+        : input.turnHints.stage === "secondaryAction"
+          ? input.turnHints.secondaryMoveTargets
+          : [],
+    highlightTone: input.turnHints.stage,
+    rotationOrigins: [],
+    rotationPreviewCells: []
+  };
+}
+
+export function findFrontendHiddenInfoLeaks(snapshot: unknown): readonly string[] {
+  const leaks: string[] = [];
+
+  if (typeof snapshot !== "object" || snapshot === null) {
+    return leaks;
+  }
+
+  const root = snapshot as {
+    readonly state?: {
+      readonly players?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+      readonly treasures?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+    };
+    readonly viewer?: {
+      readonly playerId?: string;
+    };
+  };
+  const viewerPlayerId = typeof root.viewer?.playerId === "string" ? root.viewer.playerId : null;
+  const forbiddenOpponentPlayerFields = new Set([
+    "carriedTreasureId",
+    "availablePriorityCards",
+    "specialInventory",
+    "openedTreasureIds"
+  ]);
+  const forbiddenPublicTreasureFields = new Set([
+    "slot",
+    "points",
+    "ownerPlayerId",
+    "initialPosition"
+  ]);
+
+  for (const [playerId, player] of Object.entries(root.state?.players ?? {})) {
+    if (playerId === viewerPlayerId) {
+      continue;
+    }
+
+    for (const field of forbiddenOpponentPlayerFields) {
+      if (field in player) {
+        leaks.push(`state.players.${playerId}.${field}`);
+      }
+    }
+  }
+
+  for (const [treasureId, treasure] of Object.entries(root.state?.treasures ?? {})) {
+    for (const field of forbiddenPublicTreasureFields) {
+      if (field in treasure) {
+        leaks.push(`state.treasures.${treasureId}.${field}`);
+      }
+    }
+  }
+
+  return leaks;
 }

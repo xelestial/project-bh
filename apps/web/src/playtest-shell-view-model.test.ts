@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildMoveOverlayState,
+  buildPriorityInventoryCardModels,
   buildActionStatusView,
   buildSpecialCardButtonModels,
+  buildTurnOrderChipModels,
+  findFrontendHiddenInfoLeaks,
   getDefaultMobileResourceTab
 } from "./playtest-shell-view-model.ts";
 
@@ -108,4 +112,117 @@ test("playtest shell defaults mobile resources by phase", () => {
   assert.equal(getDefaultMobileResourceTab("auction"), "actions");
   assert.equal(getDefaultMobileResourceTab("inTurn"), "actions");
   assert.equal(getDefaultMobileResourceTab("completed"), "treasures");
+});
+
+test("playtest shell priority inventory models submitted and disabled card states", () => {
+  const cards = buildPriorityInventoryCardModels({
+    availablePriorityCards: [1, 2, 4, 6],
+    phase: "prioritySubmission",
+    isMyTurn: true,
+    submittedPriorityCard: 4
+  });
+
+  assert.deepEqual(cards, [
+    { priorityCard: 1, label: "1", disabled: false, submitted: false },
+    { priorityCard: 2, label: "2", disabled: false, submitted: false },
+    { priorityCard: 4, label: "4", disabled: true, submitted: true },
+    { priorityCard: 6, label: "6", disabled: false, submitted: false }
+  ]);
+});
+
+test("playtest shell turn-order chips expose active, self, and eliminated states", () => {
+  const chips = buildTurnOrderChipModels({
+    turnOrder: ["player-2", "player-1", "player-3"],
+    activePlayerId: "player-1",
+    viewerPlayerId: "player-1",
+    players: {
+      "player-1": { name: "Alpha", eliminated: false },
+      "player-2": { name: "Bravo", eliminated: false },
+      "player-3": { name: "Charlie", eliminated: true }
+    }
+  });
+
+  assert.deepEqual(chips, [
+    { playerId: "player-2", label: "Bravo", active: false, self: false, eliminated: false, order: 1 },
+    { playerId: "player-1", label: "Alpha", active: true, self: true, eliminated: false, order: 2 },
+    { playerId: "player-3", label: "Charlie", active: false, self: false, eliminated: true, order: 3 }
+  ]);
+});
+
+test("playtest shell move overlay state separates mandatory, secondary, and rotation highlights", () => {
+  assert.deepEqual(
+    buildMoveOverlayState({
+      interactionMode: null,
+      turnHints: {
+        ...secondaryTurnHints,
+        stage: "mandatoryStep",
+        mandatoryMoveTargets: [{ x: 0, y: 1 }],
+        secondaryMoveTargets: [{ x: 0, y: 2 }]
+      }
+    }),
+    {
+      highlightedCells: [{ x: 0, y: 1 }],
+      highlightTone: "mandatoryStep",
+      rotationOrigins: [],
+      rotationPreviewCells: []
+    }
+  );
+
+  assert.deepEqual(
+    buildMoveOverlayState({
+      interactionMode: "rotate",
+      turnHints: secondaryTurnHints,
+      rotationPreviewOrigin: { x: 5, y: 5 }
+    }),
+    {
+      highlightedCells: [],
+      highlightTone: "secondaryAction",
+      rotationOrigins: [
+        { x: 5, y: 5 },
+        { x: 6, y: 5 }
+      ],
+      rotationPreviewCells: [
+        { x: 5, y: 5 },
+        { x: 6, y: 5 },
+        { x: 5, y: 6 },
+        { x: 6, y: 6 }
+      ]
+    }
+  );
+});
+
+test("playtest shell detects hidden-info leaks before rendering selector payloads", () => {
+  const leaks = findFrontendHiddenInfoLeaks({
+    state: {
+      players: {
+        "player-1": { id: "player-1", carryingTreasure: true },
+        "player-2": {
+          id: "player-2",
+          carryingTreasure: true,
+          carriedTreasureId: "treasure-private",
+          specialInventory: { fence: 1 }
+        }
+      },
+      treasures: {
+        "public-treasure-1": {
+          id: "public-treasure-1",
+          position: { x: 1, y: 1 },
+          points: 4
+        }
+      }
+    },
+    viewer: {
+      playerId: "player-1",
+      self: {
+        carriedTreasureId: "treasure-private",
+        specialInventory: { fence: 1 }
+      }
+    }
+  });
+
+  assert.deepEqual(leaks, [
+    "state.players.player-2.carriedTreasureId",
+    "state.players.player-2.specialInventory",
+    "state.treasures.public-treasure-1.points"
+  ]);
 });

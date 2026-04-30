@@ -80,6 +80,48 @@
       "kind": "rotation",
       "path": "docs/fixtures/rotations/rectangle6-vertical-counterclockwise.json",
       "consumer": ["unity-rules", "board-transform-test"]
+    },
+    {
+      "id": "scenario.auction-special-card-flow",
+      "kind": "scenario",
+      "path": "docs/fixtures/scenarios/auction-special-card-flow.v1.json",
+      "consumer": ["unity-rules", "auction-flow-test"]
+    },
+    {
+      "id": "projection.charged-inventory-hud",
+      "kind": "projection",
+      "path": "docs/fixtures/projections/charged-inventory-hud.v1.json",
+      "consumer": ["unity-client", "hud-projection-test"]
+    },
+    {
+      "id": "protocol.snapshot-sample",
+      "kind": "protocol",
+      "path": "docs/fixtures/protocol/match-snapshot.v1.json",
+      "consumer": ["unity-client", "snapshot-deserialization-test"]
+    },
+    {
+      "id": "protocol.server-rejection-catalog",
+      "kind": "protocol",
+      "path": "docs/fixtures/protocol/server-rejections.v1.json",
+      "consumer": ["unity-client", "command-error-test"]
+    },
+    {
+      "id": "security.reconnect-token-contract",
+      "kind": "security",
+      "path": "docs/fixtures/protocol/reconnect-token-contract.v1.json",
+      "consumer": ["unity-client", "reconnect-auth-test"]
+    },
+    {
+      "id": "runtime.redis-command-stream",
+      "kind": "runtime",
+      "path": "docs/fixtures/runtime/redis-command-stream.v1.json",
+      "consumer": ["backend-engine-parity", "redis-adapter-test"]
+    },
+    {
+      "id": "runtime.redis-event-stream",
+      "kind": "runtime",
+      "path": "docs/fixtures/runtime/redis-event-stream.v1.json",
+      "consumer": ["backend-engine-parity", "redis-adapter-test"]
     }
   ]
 }

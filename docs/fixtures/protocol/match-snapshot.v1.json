@@ -1,0 +1,59 @@
+{
+  "sampleId": "project-bh.protocol.match-snapshot.v1",
+  "version": 1,
+  "description": "Compact selector-projected snapshot sample for Unity client deserialization tests.",
+  "selectorId": "match.snapshotBundle.v1",
+  "revision": 12,
+  "payload": {
+    "sessionId": "session-snapshot-sample",
+    "logLength": 18,
+    "state": {
+      "matchId": "match-snapshot-sample",
+      "round": {
+        "roundNumber": 1,
+        "phase": "inTurn",
+        "activePlayerId": "player-1",
+        "turnOrder": ["player-1", "player-2"],
+        "turn": {
+          "playerId": "player-1",
+          "stage": "secondaryAction",
+          "mandatoryStepDirection": "south"
+        }
+      },
+      "players": {
+        "player-1": {
+          "id": "player-1",
+          "name": "Alpha",
+          "position": { "x": 0, "y": 1 },
+          "score": 2,
+          "hitPoints": 10,
+          "eliminated": false,
+          "carryingTreasure": false
+        },
+        "player-2": {
+          "id": "player-2",
+          "name": "Bravo",
+          "position": { "x": 19, "y": 19 },
+          "score": 3,
+          "hitPoints": 10,
+          "eliminated": false,
+          "carryingTreasure": false
+        }
+      }
+    },
+    "viewer": {
+      "playerId": "player-1",
+      "self": {
+        "availablePriorityCards": [1, 2, 3, 4, 5],
+        "specialInventory": {
+          "fence": 2,
+          "largeHammer": 1
+        }
+      },
+      "turnHints": {
+        "active": true,
+        "stage": "secondaryAction"
+      }
+    }
+  }
+}

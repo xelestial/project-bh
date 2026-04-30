@@ -11,6 +11,7 @@ import {
 } from "../../../packages/domain/src/index.ts";
 import {
   buildActionStatusView,
+  buildMoveOverlayState,
   buildSpecialCardButtonModels,
   formatSpecialCardLabel,
   formatSpecialCardTargetHint,
@@ -1012,19 +1013,6 @@ function TurnOrderStrip(props: { snapshot: ProjectedSnapshot; compact?: boolean 
   );
 }
 
-function getSquare2PreviewCells(origin: { x: number; y: number } | null): { x: number; y: number }[] {
-  if (!origin) {
-    return [];
-  }
-
-  return [
-    origin,
-    { x: origin.x + 1, y: origin.y },
-    { x: origin.x, y: origin.y + 1 },
-    { x: origin.x + 1, y: origin.y + 1 }
-  ];
-}
-
 function getRoomPlayerName(room: RoomState, playerId: string): string {
   return room.players.find((player) => player.id === playerId)?.name ?? playerId;
 }
@@ -1396,6 +1384,12 @@ export function App() {
   const isMyTurn = snapshot?.state.round.activePlayerId === playerId;
   const pendingLabel = pendingActionLabel(pendingAction, snapshot);
   const turnHints = snapshot?.viewer.turnHints ?? null;
+  const rotationPreviewOrigin = selectedRotationOrigin ?? hoveredRotationOrigin;
+  const moveOverlayState = buildMoveOverlayState({
+    interactionMode,
+    turnHints,
+    rotationPreviewOrigin
+  });
   const selectedSpecialCard = pendingAction?.kind === "specialCard" ? pendingAction.cardType : null;
   const specialCardButtons =
     me && turnHints
@@ -1407,17 +1401,6 @@ export function App() {
           selectedCardType: selectedSpecialCard
         })
       : [];
-  const highlightedCells =
-    interactionMode === "rotate"
-      ? []
-      : turnHints?.stage === "mandatoryStep"
-      ? turnHints.mandatoryMoveTargets
-      : turnHints?.stage === "secondaryAction"
-        ? turnHints.secondaryMoveTargets
-        : [];
-  const rotationOrigins = interactionMode === "rotate" ? turnHints?.rotationOrigins ?? [] : [];
-  const rotationPreviewOrigin = selectedRotationOrigin ?? hoveredRotationOrigin;
-  const rotationPreviewCells = interactionMode === "rotate" ? getSquare2PreviewCells(rotationPreviewOrigin) : [];
 
   useEffect(() => {
     if (!snapshot) {
@@ -2318,13 +2301,13 @@ export function App() {
                 snapshot={snapshot}
                 playerId={playerId}
                 tileWidth={boardViewportSize ?? 28}
-                highlightedCells={highlightedCells}
-                highlightTone={snapshot.viewer.turnHints.stage}
+                highlightedCells={moveOverlayState.highlightedCells}
+                highlightTone={moveOverlayState.highlightTone}
                 rotationMode={interactionMode === "rotate"}
-                rotationOrigins={rotationOrigins}
+                rotationOrigins={moveOverlayState.rotationOrigins}
                 selectedRotationOrigin={selectedRotationOrigin}
                 hoveredRotationOrigin={hoveredRotationOrigin}
-                rotationPreviewCells={rotationPreviewCells}
+                rotationPreviewCells={moveOverlayState.rotationPreviewCells}
                 onRotationCellSelect={(event, cell) => {
                   const rect = event.currentTarget.getBoundingClientRect();
                   void openRotationActions(cell, rect.left + rect.width / 2, rect.top + rect.height / 2);

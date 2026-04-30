@@ -35,16 +35,16 @@ The first parity targets should be:
 - replay fixtures for full rounds, starting with `docs/fixtures/replays/five-round-command-log.v1.json`
 - tile interaction and status golden cases, including river, ice, elimination, and skip-countdown samples in `docs/fixtures/rules/`
 - rotation golden cases in `docs/fixtures/rotations/` for cross5 and rectangle6 large-hammer transforms
-- auction and special-card scenario fixtures
-- charged-inventory projection samples for the player HUD
-- protocol snapshot samples
+- auction and special-card scenario fixtures in `docs/fixtures/scenarios/`
+- charged-inventory projection samples for the player HUD in `docs/fixtures/projections/`
+- protocol snapshot samples in `docs/fixtures/protocol/`
 - granular selector payload samples for public state, viewer-private state, turn hints, and the React compatibility bundle in `docs/fixtures/selectors/`
-- server rejection catalogs
+- server rejection catalogs in `docs/fixtures/protocol/`
 - player-private treasure projection samples for Unity client parity checks
 - secure reconnect/session-token samples so Unity can match the same transport-auth contract without trusting public player ids
 - resolution-step fixtures for complex skills so Unity can verify damage, push, collision, tile effects, treasure drops, and turn interruption in the same order as the TypeScript reference
-- Redis command/event stream samples for backend-engine parity checks
-- online benchmark profiles for room, command, reconnect, and selector latency targets
+- Redis command/event stream samples for backend-engine parity checks in `docs/fixtures/runtime/`
+- online benchmark profiles for room, command, reconnect, selector, and Redis stream latency targets
 - checked asset catalog entries for every committed parity fixture
 
 ## Unity client boundary

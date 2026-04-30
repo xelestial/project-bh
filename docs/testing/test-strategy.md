@@ -101,6 +101,16 @@ Run a larger local benchmark with:
 BH_BENCH_ROOMS=100 BH_BENCH_PLAYERS=4 BH_BENCH_COMMANDS=1 pnpm benchmark:online
 ```
 
+Run one of the deeper benchmark profiles with:
+
+```bash
+BH_BENCH_PROFILE=selector-latency pnpm benchmark:online
+BH_BENCH_PROFILE=reconnect-latency pnpm benchmark:online
+BH_BENCH_PROFILE=multi-room-redis-stream-throughput BH_BENCH_OUTPUT=benchmarks/redis-streams.jsonl pnpm benchmark:online
+```
+
+The profile ids add stable metric tags and workload defaults for selector refresh latency, reconnect hydration latency, and multi-room Redis stream throughput comparisons.
+
 ## Human playtest baseline
 
 - Local human-vs-human playtests should run against the authoritative HTTP/WebSocket server, not a client-only mock.
@@ -110,9 +120,10 @@ BH_BENCH_ROOMS=100 BH_BENCH_PLAYERS=4 BH_BENCH_COMMANDS=1 pnpm benchmark:online
   - domain/application tests for legality
   - browser-facing smoke tests for treasure placement, sequential auction reveal, and right-click action query
   - UI checks for card-shaped priority inventory and visible turn-order chips
-  - targeted UI tests for move highlights and overlay state when the shell gains a component-test harness
-  - snapshot-boundary tests that assert hidden information never leaks through either HTTP refresh or websocket room updates
+  - targeted UI tests for move highlights and overlay state
+  - snapshot-boundary tests that assert hidden information never leaks through frontend selector payloads
 
 ## Planned next layers
 
-1. Add deeper benchmark profiles for selector latency, reconnect latency, and multi-room Redis stream throughput.
+1. Add visual browser assertions for the new priority, turn-order, and overlay model states.
+2. Add resolved scenario fixtures for more special-card combinations as rules stabilize.

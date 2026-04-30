@@ -1,0 +1,37 @@
+{
+  "streamId": "project-bh.runtime.redis-command-stream.v1",
+  "version": 1,
+  "redisStream": "bh:session:session-runtime-sample:commands",
+  "entries": [
+    {
+      "id": "1-0",
+      "payload": {
+        "commandId": "command-runtime-1",
+        "roomId": "room-runtime-sample",
+        "playerId": "player-1",
+        "receivedAt": "2026-04-30T00:00:00.000Z",
+        "payload": {
+          "type": "match.submitPriority",
+          "version": 1,
+          "matchId": "match-runtime-sample",
+          "priorityCard": 6
+        }
+      }
+    },
+    {
+      "id": "2-0",
+      "payload": {
+        "commandId": "command-runtime-2",
+        "roomId": "room-runtime-sample",
+        "playerId": "player-2",
+        "receivedAt": "2026-04-30T00:00:01.000Z",
+        "payload": {
+          "type": "match.submitPriority",
+          "version": 1,
+          "matchId": "match-runtime-sample",
+          "priorityCard": 5
+        }
+      }
+    }
+  ]
+}
