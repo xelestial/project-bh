@@ -11,6 +11,7 @@
     "dev:server": "node --watch --experimental-strip-types apps/server/src/http-server.ts",
     "dev:web": "node --experimental-strip-types apps/web/dev-server.ts",
     "benchmark:online": "pnpm --filter @project-bh/server benchmark:online",
+    "check:server-production-config": "pnpm --filter @project-bh/server check:production-config",
     "test": "node --experimental-strip-types --test 'packages/*/src/*.test.ts' 'apps/*/*.test.ts' 'apps/server/src/**/*.test.ts' 'apps/web/src/index.test.ts' 'apps/web/src/runtime-transport.test.ts'",
     "test:watch": "node --experimental-strip-types --test --watch 'packages/*/src/*.test.ts' 'apps/*/*.test.ts' 'apps/server/src/**/*.test.ts' 'apps/web/src/index.test.ts' 'apps/web/src/runtime-transport.test.ts'",
     "test:browser-smoke": "node --experimental-strip-types --test apps/web/src/gui-smoke.e2e.test.ts",

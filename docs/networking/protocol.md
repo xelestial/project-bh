@@ -262,6 +262,13 @@ The local multiplayer shell now supports explicit runtime transport configuratio
   - env: `REDIS_URL` when Redis mode is enabled
   - env: `SESSION_TOKEN_SECRET` when Redis mode is enabled
   - env: `CORS_ALLOWED_ORIGINS` as a comma-separated allowlist
+- Production server runtime:
+  - env: `NODE_ENV=production`
+  - env: `RUNTIME_STORE=redis`
+  - env: `REDIS_URL` using the deployment Redis endpoint
+  - env: `SESSION_TOKEN_SECRET` with at least 32 characters, never the local default
+  - env: `CORS_ALLOWED_ORIGINS` with explicit web origins; empty allowlists become wildcard CORS and are rejected in production
+  - check: `pnpm check:server-production-config`
 - Web dev-server bind host and port:
   - CLI: `--host`, `--port`
   - env: `WEB_HOST`, `WEB_PORT`

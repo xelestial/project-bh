@@ -61,7 +61,7 @@ The current baseline now covers:
 - local client adapter and view-model composition
 - player-private snapshot projection for hidden treasure data
 - server-issued reconnect/session tokens so transport auth does not trust public `playerId` values
-- HMAC-hashed session token storage, cryptographic invite-code generation, CORS allowlists, and fixed-window request limits
+- HMAC-hashed session token storage, cryptographic invite-code generation, production Redis config validation, CORS allowlists, and fixed-window request limits
 - runtime-store ports for rooms, sessions, match snapshots, command streams, event streams, idempotency records, and rate-limit counters
 - Redis runtime adapter that stores canonical JSON records and uses Redis Streams for command/event transport
 - authoritative engine worker that applies queued command envelopes through `packages/application` and writes canonical snapshots/events
@@ -75,11 +75,10 @@ The current baseline now covers:
 
 ## Near-term build order
 
-1. Wire production deployment to `RUNTIME_STORE=redis` with `REDIS_URL`, `SESSION_TOKEN_SECRET`, and explicit `CORS_ALLOWED_ORIGINS`.
-2. Add Redis-backed reconnect and multi-process fanout tests once a shared Redis instance is available in CI.
-3. Add selector payload golden samples for React and future Unity parity tests.
-4. Deepen scenario coverage for remaining ambiguous rule interactions.
-5. Expand replay export into a durable external contract.
+1. Add Redis-backed reconnect and multi-process fanout tests once a shared Redis instance is available in CI.
+2. Add selector payload golden samples for React and future Unity parity tests.
+3. Deepen scenario coverage for remaining ambiguous rule interactions.
+4. Expand replay export into a durable external contract.
 
 The more detailed sequence now lives in `docs/planning/implementation-roadmap.md`.
 

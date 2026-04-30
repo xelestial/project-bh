@@ -69,6 +69,38 @@ function parseCorsAllowedOrigins(rawValue: string | undefined): readonly string[
     .filter((origin) => origin.length > 0);
 }
 
+function isProduction(env: NodeJS.ProcessEnv): boolean {
+  return env.NODE_ENV === "production";
+}
+
+function validateProductionRuntimeConfig(input: {
+  readonly runtimeStore: "memory" | "redis";
+  readonly sessionTokenSecret: string;
+  readonly corsAllowedOrigins: readonly string[];
+}): void {
+  if (input.runtimeStore !== "redis") {
+    throw new Error("RUNTIME_STORE=redis is required when NODE_ENV=production.");
+  }
+
+  if (input.sessionTokenSecret.length < 32) {
+    throw new Error(
+      "SESSION_TOKEN_SECRET must be at least 32 characters when NODE_ENV=production."
+    );
+  }
+
+  if (input.sessionTokenSecret === "project-bh-local-session-secret") {
+    throw new Error(
+      "SESSION_TOKEN_SECRET must not use the local default when NODE_ENV=production."
+    );
+  }
+
+  if (input.corsAllowedOrigins.length === 0) {
+    throw new Error(
+      "CORS_ALLOWED_ORIGINS must be explicitly configured when NODE_ENV=production."
+    );
+  }
+}
+
 export function resolveHttpServerRuntimeConfig(
   sources: HttpServerRuntimeConfigSources = {}
 ): HttpServerRuntimeConfig {
@@ -95,6 +127,14 @@ export function resolveHttpServerRuntimeConfig(
     if (!env.SESSION_TOKEN_SECRET?.trim()) {
       throw new Error("SESSION_TOKEN_SECRET is required when RUNTIME_STORE=redis.");
     }
+  }
+
+  if (isProduction(env)) {
+    validateProductionRuntimeConfig({
+      runtimeStore,
+      sessionTokenSecret,
+      corsAllowedOrigins
+    });
   }
 
   return {

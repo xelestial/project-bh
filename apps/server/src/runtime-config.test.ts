@@ -97,3 +97,77 @@ test("server runtime config requires redis url and session secret for redis mode
     /REDIS_URL/
   );
 });
+
+test("server runtime config requires redis runtime in production", () => {
+  assert.throws(
+    () =>
+      resolveHttpServerRuntimeConfig({
+        argv: [],
+        env: {
+          NODE_ENV: "production",
+          RUNTIME_STORE: "memory",
+          REDIS_URL: "redis://redis.internal:6379",
+          SESSION_TOKEN_SECRET: "0123456789abcdef0123456789abcdef",
+          CORS_ALLOWED_ORIGINS: "https://game.example"
+        }
+      }),
+    /RUNTIME_STORE=redis/
+  );
+});
+
+test("server runtime config rejects weak production session secrets", () => {
+  assert.throws(
+    () =>
+      resolveHttpServerRuntimeConfig({
+        argv: [],
+        env: {
+          NODE_ENV: "production",
+          RUNTIME_STORE: "redis",
+          REDIS_URL: "redis://redis.internal:6379",
+          SESSION_TOKEN_SECRET: "short-secret",
+          CORS_ALLOWED_ORIGINS: "https://game.example"
+        }
+      }),
+    /SESSION_TOKEN_SECRET/
+  );
+});
+
+test("server runtime config requires explicit production cors origins", () => {
+  assert.throws(
+    () =>
+      resolveHttpServerRuntimeConfig({
+        argv: [],
+        env: {
+          NODE_ENV: "production",
+          RUNTIME_STORE: "redis",
+          REDIS_URL: "redis://redis.internal:6379",
+          SESSION_TOKEN_SECRET: "0123456789abcdef0123456789abcdef"
+        }
+      }),
+    /CORS_ALLOWED_ORIGINS/
+  );
+});
+
+test("server runtime config accepts a production redis deployment config", () => {
+  const config = resolveHttpServerRuntimeConfig({
+    argv: [],
+    env: {
+      NODE_ENV: "production",
+      HOST: "0.0.0.0",
+      PORT: "8787",
+      RUNTIME_STORE: "redis",
+      REDIS_URL: "rediss://redis.internal:6379",
+      SESSION_TOKEN_SECRET: "0123456789abcdef0123456789abcdef",
+      CORS_ALLOWED_ORIGINS: "https://game.example"
+    }
+  });
+
+  assert.deepEqual(config, {
+    corsAllowedOrigins: ["https://game.example"],
+    host: "0.0.0.0",
+    port: 8787,
+    redisUrl: "rediss://redis.internal:6379",
+    runtimeStore: "redis",
+    sessionTokenSecret: "0123456789abcdef0123456789abcdef"
+  });
+});
