@@ -69,6 +69,7 @@ The current baseline now covers:
 - backend event fanout poller that reads authoritative event streams with per-backend stream cursors
 - online-game benchmark harness for many rooms, players, commands, and optional WebSocket clients
 - granular selector contracts for `publicState`, `viewerPrivate`, and `turnHints`, with the existing React snapshot bundle composed from those smaller contracts
+- selector golden samples in `docs/fixtures/selectors/` for React and Unity parity checks
 - explicit public/private snapshot boundaries
   - public state contains only shared board, round, score, and occupancy data
   - viewer state contains private inventory, hand, and opened-treasure details for one player only
@@ -77,10 +78,9 @@ The current baseline now covers:
 
 ## Near-term build order
 
-1. Add Redis-backed reconnect and multi-process fanout tests once a shared Redis instance is available in CI.
-2. Add selector payload golden samples for React and future Unity parity tests.
-3. Deepen scenario coverage for remaining ambiguous rule interactions.
-4. Expand replay export into a durable external contract.
+1. Deepen scenario coverage for remaining ambiguous rule interactions.
+2. Expand replay export into a durable external contract.
+3. Add Redis-backed reconnect and multi-process fanout tests to CI once a shared Redis service is available.
 
 The more detailed sequence now lives in `docs/planning/implementation-roadmap.md`.
 

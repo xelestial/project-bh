@@ -1,0 +1,42 @@
+{
+  "selectorId": "match.viewerPrivate.v1",
+  "version": 1,
+  "revision": 7,
+  "payload": {
+    "playerId": "player-1",
+    "self": {
+      "id": "player-1",
+      "carriedTreasureId": null,
+      "openedTreasureIds": [],
+      "availablePriorityCards": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "specialInventory": {
+        "coldBomb": 0,
+        "flameBomb": 0,
+        "electricBomb": 0,
+        "largeHammer": 0,
+        "fence": 0,
+        "largeFence": 0,
+        "recoveryPotion": 0,
+        "jump": 0,
+        "hook": 0
+      },
+      "status": {
+        "fire": false,
+        "water": false,
+        "skipNextTurnCount": 0,
+        "movementLimit": null
+      }
+    },
+    "treasurePlacementHand": [],
+    "revealedTreasureCards": [],
+    "auction": {
+      "hasSubmittedBid": false
+    }
+  }
+}

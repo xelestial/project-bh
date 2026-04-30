@@ -39,6 +39,7 @@ Current coverage includes:
 - HTTP integration coverage for invalid session-token rejection and secure per-player reconnect flow
 - selector envelope tests for exact frontend payload boundaries
 - selector registry tests for public/viewer private-data separation
+- selector golden-sample tests that compare `docs/fixtures/selectors/*.json` with the stable two-player projection fixture
 - secure session-token tests for entropy, HMAC hashing, constant-time verification, and redaction
 - runtime-store contract tests for room/session/snapshot/stream persistence
 - Redis runtime-store integration tests gated by `REDIS_URL`

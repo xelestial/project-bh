@@ -37,7 +37,7 @@ The first parity targets should be:
 - auction and special-card scenario fixtures
 - charged-inventory projection samples for the player HUD
 - protocol snapshot samples
-- granular selector payload samples for public state, viewer-private state, and turn hints
+- granular selector payload samples for public state, viewer-private state, turn hints, and the React compatibility bundle in `docs/fixtures/selectors/`
 - server rejection catalogs
 - player-private treasure projection samples for Unity client parity checks
 - secure reconnect/session-token samples so Unity can match the same transport-auth contract without trusting public player ids

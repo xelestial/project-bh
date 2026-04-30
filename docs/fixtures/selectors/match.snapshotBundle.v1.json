@@ -1,0 +1,237 @@
+{
+  "selectorId": "match.snapshotBundle.v1",
+  "version": 1,
+  "revision": 7,
+  "payload": {
+    "sessionId": "session-selector-golden",
+    "logLength": 7,
+    "state": {
+      "matchId": "match-fixture",
+      "settings": {
+        "totalRounds": 5,
+        "roundOpenTreasureTarget": 4,
+        "rotationZone": {
+          "origin": {
+            "x": 5,
+            "y": 5
+          },
+          "width": 10,
+          "height": 10
+        },
+        "treasurePlacementZone": {
+          "origin": {
+            "x": 7,
+            "y": 7
+          },
+          "width": 6,
+          "height": 6
+        }
+      },
+      "treasureBoard": {
+        "slots": [
+          {
+            "slot": 1,
+            "hasCard": true,
+            "opened": false,
+            "openedByPlayerId": null
+          },
+          {
+            "slot": 2,
+            "hasCard": true,
+            "opened": false,
+            "openedByPlayerId": null
+          },
+          {
+            "slot": 3,
+            "hasCard": true,
+            "opened": false,
+            "openedByPlayerId": null
+          },
+          {
+            "slot": 4,
+            "hasCard": true,
+            "opened": false,
+            "openedByPlayerId": null
+          }
+        ]
+      },
+      "players": {
+        "player-1": {
+          "id": "player-1",
+          "name": "Alpha",
+          "seat": 0,
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "score": 3,
+          "hitPoints": 10,
+          "eliminated": false,
+          "carryingTreasure": false
+        },
+        "player-2": {
+          "id": "player-2",
+          "name": "Bravo",
+          "seat": 1,
+          "position": {
+            "x": 19,
+            "y": 0
+          },
+          "score": 3,
+          "hitPoints": 10,
+          "eliminated": false,
+          "carryingTreasure": false
+        }
+      },
+      "treasures": {
+        "tt-99f944e3a2c968cd": {
+          "id": "tt-99f944e3a2c968cd",
+          "position": {
+            "x": 1,
+            "y": 0
+          },
+          "carriedByPlayerId": null,
+          "openedByPlayerId": null,
+          "removedFromRound": false
+        },
+        "tt-a025d299b725eb2a": {
+          "id": "tt-a025d299b725eb2a",
+          "position": {
+            "x": 18,
+            "y": 0
+          },
+          "carriedByPlayerId": null,
+          "openedByPlayerId": null,
+          "removedFromRound": false
+        },
+        "tt-dc51b4ee1b2bd1bc": {
+          "id": "tt-dc51b4ee1b2bd1bc",
+          "position": {
+            "x": 19,
+            "y": 18
+          },
+          "carriedByPlayerId": null,
+          "openedByPlayerId": null,
+          "removedFromRound": false
+        },
+        "tt-be17611e4744fcd2": {
+          "id": "tt-be17611e4744fcd2",
+          "position": {
+            "x": 0,
+            "y": 18
+          },
+          "carriedByPlayerId": null,
+          "openedByPlayerId": null,
+          "removedFromRound": false
+        }
+      },
+      "board": {
+        "width": 20,
+        "height": 20,
+        "tiles": {},
+        "fences": {}
+      },
+      "round": {
+        "roundNumber": 1,
+        "phase": "inTurn",
+        "activePlayerId": "player-1",
+        "turnOrder": [
+          "player-1",
+          "player-2"
+        ],
+        "turn": {
+          "playerId": "player-1",
+          "stage": "mandatoryStep",
+          "mandatoryStepDirection": null
+        },
+        "auction": {
+          "currentOffer": {
+            "slot": 3,
+            "cardType": "largeHammer"
+          },
+          "currentOfferIndex": 3,
+          "totalOffers": 4,
+          "resolvedOffers": {
+            "0": null,
+            "1": null,
+            "2": null,
+            "3": null
+          },
+          "submittedPlayerIds": [],
+          "hasSubmittedBid": false
+        }
+      },
+      "completed": false,
+      "result": null
+    },
+    "viewer": {
+      "playerId": "player-1",
+      "self": {
+        "id": "player-1",
+        "carriedTreasureId": null,
+        "openedTreasureIds": [],
+        "availablePriorityCards": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "specialInventory": {
+          "coldBomb": 0,
+          "flameBomb": 0,
+          "electricBomb": 0,
+          "largeHammer": 0,
+          "fence": 0,
+          "largeFence": 0,
+          "recoveryPotion": 0,
+          "jump": 0,
+          "hook": 0
+        },
+        "status": {
+          "fire": false,
+          "water": false,
+          "skipNextTurnCount": 0,
+          "movementLimit": null
+        }
+      },
+      "treasurePlacementHand": [],
+      "revealedTreasureCards": [],
+      "turnHints": {
+        "active": true,
+        "stage": "mandatoryStep",
+        "mandatoryMoveTargets": [
+          {
+            "x": 1,
+            "y": 0
+          },
+          {
+            "x": 0,
+            "y": 1
+          }
+        ],
+        "secondaryMoveTargets": [],
+        "rotationOrigins": [],
+        "availableSecondaryActions": {
+          "move": false,
+          "throwTile": false,
+          "rotateTiles": false,
+          "specialCard": false,
+          "openTreasure": false,
+          "endTurn": false
+        },
+        "availableSpecialCards": {
+          "coldBomb": false,
+          "flameBomb": false,
+          "electricBomb": false,
+          "largeHammer": false,
+          "fence": false,
+          "largeFence": false,
+          "recoveryPotion": false,
+          "jump": false,
+          "hook": false
+        }
+      }
+    }
+  }
+}

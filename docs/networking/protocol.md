@@ -197,6 +197,7 @@ This lets the web shell support:
     - authoritative affordances for the authenticated viewer's available actions
   - `match.snapshotBundle.v1`
     - compatibility envelope composed from the three smaller selector payloads for the React shell
+- Golden selector envelope samples live in `docs/fixtures/selectors/` and are verified by `apps/server/src/selectors/selector-golden.test.ts`.
 - The server uses the same player-specific projection rules for both:
   - `GET /api/rooms/:roomId?playerId=...`
   - websocket `room.updated` payloads for started rooms
