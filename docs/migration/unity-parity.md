@@ -33,7 +33,7 @@ The first parity targets should be:
 
 - replay fixtures for full rounds, starting with `docs/fixtures/replays/five-round-command-log.v1.json`
 - tile interaction golden cases, including river and ice samples in `docs/fixtures/rules/`
-- rotation golden cases
+- rotation golden cases in `docs/fixtures/rotations/` for cross5 and rectangle6 large-hammer transforms
 - auction and special-card scenario fixtures
 - charged-inventory projection samples for the player HUD
 - protocol snapshot samples

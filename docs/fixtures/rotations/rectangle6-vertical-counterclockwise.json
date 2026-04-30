@@ -1,0 +1,61 @@
+{
+  "name": "large hammer rotates a vertical rectangle6 selection",
+  "input": {
+    "activePlayerId": "player-1",
+    "cardType": "largeHammer",
+    "selection": {
+      "kind": "rectangle6",
+      "origin": {
+        "x": 10,
+        "y": 7
+      },
+      "orientation": "vertical"
+    },
+    "direction": "counterclockwise",
+    "startingTiles": {
+      "10,7": "water",
+      "11,7": "ice",
+      "10,8": "fire",
+      "11,8": "electric",
+      "10,9": "water",
+      "11,9": "fire"
+    },
+    "startingTreasurePosition": {
+      "x": 10,
+      "y": 9
+    }
+  },
+  "output": {
+    "tileKinds": {
+      "10,7": "ice",
+      "10,8": "water",
+      "10,9": "plain",
+      "11,7": "electric",
+      "11,8": "fire",
+      "11,9": "plain",
+      "12,7": "fire",
+      "12,8": "water"
+    },
+    "treasurePosition": {
+      "x": 12,
+      "y": 8
+    },
+    "largeHammerCharges": 0,
+    "activePlayerId": "player-2",
+    "turnStage": "mandatoryStep",
+    "events": [
+      "specialCardUsed",
+      "boardRotated",
+      "tileChanged",
+      "tileChanged",
+      "tileChanged",
+      "tileChanged",
+      "tileChanged",
+      "tileChanged",
+      "tileChanged",
+      "tileChanged",
+      "treasureMoved",
+      "turnEnded"
+    ]
+  }
+}

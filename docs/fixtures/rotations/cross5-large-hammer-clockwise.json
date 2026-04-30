@@ -1,0 +1,51 @@
+{
+  "name": "large hammer rotates a cross5 selection with tiles and treasure",
+  "input": {
+    "activePlayerId": "player-1",
+    "cardType": "largeHammer",
+    "selection": {
+      "kind": "cross5",
+      "center": {
+        "x": 8,
+        "y": 8
+      }
+    },
+    "direction": "clockwise",
+    "startingTiles": {
+      "8,7": "fire",
+      "9,8": "electric",
+      "8,9": "water",
+      "7,8": "ice"
+    },
+    "startingTreasurePosition": {
+      "x": 8,
+      "y": 7
+    }
+  },
+  "output": {
+    "tileKinds": {
+      "7,8": "water",
+      "8,7": "ice",
+      "8,8": "plain",
+      "8,9": "electric",
+      "9,8": "fire"
+    },
+    "treasurePosition": {
+      "x": 9,
+      "y": 8
+    },
+    "largeHammerCharges": 0,
+    "activePlayerId": "player-2",
+    "turnStage": "mandatoryStep",
+    "events": [
+      "specialCardUsed",
+      "boardRotated",
+      "tileChanged",
+      "tileChanged",
+      "tileChanged",
+      "tileChanged",
+      "treasureMoved",
+      "turnEnded"
+    ]
+  }
+}
