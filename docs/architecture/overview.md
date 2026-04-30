@@ -73,6 +73,7 @@ The current baseline now covers:
 - rule scenario golden samples in `docs/fixtures/rules/` for river formation, river movement blocking, ice-triggered treasure drops, elimination drops, and round-tick skip countdowns
 - rotation golden samples in `docs/fixtures/rotations/` for large-hammer cross5 and rectangle6 parity checks
 - replay export schema and compact command-log samples in `docs/fixtures/replays/`
+- Unity parity asset catalog in `docs/fixtures/unity-parity/` that enumerates reusable selector, replay, rule, and rotation fixtures
 - explicit public/private snapshot boundaries
   - public state contains only shared board, round, score, and occupancy data
   - viewer state contains private inventory, hand, and opened-treasure details for one player only
@@ -81,7 +82,7 @@ The current baseline now covers:
 
 ## Near-term build order
 
-1. Add Unity parity asset catalog samples that enumerate the reusable fixture set.
+1. Add deeper benchmark profiles for selector latency, reconnect latency, and multi-room Redis stream throughput.
 
 The more detailed sequence now lives in `docs/planning/implementation-roadmap.md`.
 

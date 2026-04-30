@@ -1,0 +1,85 @@
+{
+  "catalogId": "project-bh.unity-parity.asset-catalog.v1",
+  "version": 1,
+  "generatedFor": "unity-parity",
+  "assets": [
+    {
+      "id": "selector.public-state",
+      "kind": "selector",
+      "path": "docs/fixtures/selectors/match.publicState.v1.json",
+      "consumer": ["unity-client", "contract-test"]
+    },
+    {
+      "id": "selector.viewer-private",
+      "kind": "selector",
+      "path": "docs/fixtures/selectors/match.viewerPrivate.v1.json",
+      "consumer": ["unity-client", "private-state-test"]
+    },
+    {
+      "id": "selector.turn-hints",
+      "kind": "selector",
+      "path": "docs/fixtures/selectors/match.turnHints.v1.json",
+      "consumer": ["unity-client", "input-affordance-test"]
+    },
+    {
+      "id": "selector.snapshot-bundle",
+      "kind": "selector",
+      "path": "docs/fixtures/selectors/match.snapshotBundle.v1.json",
+      "consumer": ["unity-client", "compatibility-test"]
+    },
+    {
+      "id": "replay.five-round-command-log",
+      "kind": "replay",
+      "path": "docs/fixtures/replays/five-round-command-log.v1.json",
+      "consumer": ["unity-replay-runner", "backend-engine-parity"]
+    },
+    {
+      "id": "rule.ice-drop-carried-treasure",
+      "kind": "rule-scenario",
+      "path": "docs/fixtures/rules/ice-drop-carried-treasure.json",
+      "consumer": ["unity-rules", "domain-parity-test"]
+    },
+    {
+      "id": "rule.river-formation",
+      "kind": "rule-scenario",
+      "path": "docs/fixtures/rules/river-formation.json",
+      "consumer": ["unity-rules", "domain-parity-test"]
+    },
+    {
+      "id": "rule.river-movement-block",
+      "kind": "rule-scenario",
+      "path": "docs/fixtures/rules/river-movement-block.json",
+      "consumer": ["unity-rules", "input-validation-test"]
+    },
+    {
+      "id": "rule.elimination-drops-treasure",
+      "kind": "rule-scenario",
+      "path": "docs/fixtures/rules/elimination-drops-treasure.json",
+      "consumer": ["unity-rules", "domain-parity-test"]
+    },
+    {
+      "id": "rule.round-tick-skip-countdown",
+      "kind": "rule-scenario",
+      "path": "docs/fixtures/rules/round-tick-skip-countdown.json",
+      "consumer": ["unity-rules", "turn-system-test"]
+    },
+    {
+      "id": "rotation.cross5-large-hammer-clockwise",
+      "kind": "rotation",
+      "path": "docs/fixtures/rotations/cross5-large-hammer-clockwise.json",
+      "consumer": ["unity-rules", "board-transform-test"]
+    },
+    {
+      "id": "rotation.rectangle6-horizontal-clockwise",
+      "kind": "rotation",
+      "path": "docs/fixtures/rotations/rectangle6-horizontal-clockwise.json",
+      "consumer": ["unity-rules", "board-transform-test"]
+    },
+    {
+      "id": "rotation.rectangle6-vertical-counterclockwise",
+      "kind": "rotation",
+      "path": "docs/fixtures/rotations/rectangle6-vertical-counterclockwise.json",
+      "consumer": ["unity-rules", "board-transform-test"]
+    }
+  ]
+}

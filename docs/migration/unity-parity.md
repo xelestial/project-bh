@@ -8,6 +8,7 @@
 - Runtime storage is behind ports; Redis does not enter domain rules.
 - Frontend-visible data is selector-projected and versioned.
 - Test fixtures are reusable without a renderer.
+- `docs/fixtures/unity-parity/asset-catalog.v1.json` enumerates the current reusable selector, replay, rule, and rotation samples for Unity consumers.
 
 ## Parity strategy
 
@@ -44,6 +45,7 @@ The first parity targets should be:
 - resolution-step fixtures for complex skills so Unity can verify damage, push, collision, tile effects, treasure drops, and turn interruption in the same order as the TypeScript reference
 - Redis command/event stream samples for backend-engine parity checks
 - online benchmark profiles for room, command, reconnect, and selector latency targets
+- checked asset catalog entries for every committed parity fixture
 
 ## Unity client boundary
 

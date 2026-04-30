@@ -44,6 +44,7 @@ Current coverage includes:
 - rule scenario golden-sample tests that compare `docs/fixtures/rules/*.json` with river, ice, elimination, and round-tick status fixtures
 - rotation golden-sample tests that compare `docs/fixtures/rotations/*.json` with cross5 and rectangle6 large-hammer domain fixtures
 - replay schema tests that validate `docs/fixtures/replays/*.json` as durable external replay contracts
+- Unity parity asset-catalog tests that assert every catalog entry points to a checked-in fixture file
 - secure session-token tests for entropy, HMAC hashing, constant-time verification, and redaction
 - runtime-store contract tests for room/session/snapshot/stream persistence
 - Redis runtime-store integration tests gated by `REDIS_URL`
@@ -114,4 +115,4 @@ BH_BENCH_ROOMS=100 BH_BENCH_PLAYERS=4 BH_BENCH_COMMANDS=1 pnpm benchmark:online
 
 ## Planned next layers
 
-1. Add Unity parity asset catalog samples that enumerate reusable fixture sets and expected consumers.
+1. Add deeper benchmark profiles for selector latency, reconnect latency, and multi-room Redis stream throughput.
