@@ -117,7 +117,9 @@ export function createRedisRuntimeStore(
     events: (sessionId: string) => `${prefix}:match:${sessionId}:events`,
     idempotency: (sessionId: string, commandId: string) =>
       `${prefix}:match:${sessionId}:idempotency:${commandId}`,
-    rateLimit: (key: string) => `${prefix}:ratelimit:${key}`
+    rateLimit: (key: string) => `${prefix}:ratelimit:${key}`,
+    engineCursor: (sessionId: string, consumerName: string) =>
+      `${prefix}:match:${sessionId}:cursor:${consumerName}`
   };
 
   async function readRooms(): Promise<readonly RoomRecord[]> {
@@ -261,6 +263,17 @@ export function createRedisRuntimeStore(
         }
 
         return count;
+      }
+    },
+    engineCursors: {
+      async get(sessionId, consumerName) {
+        return options.client.get(keys.engineCursor(sessionId, consumerName));
+      },
+      async save(sessionId, consumerName, streamId) {
+        await options.client.set(
+          keys.engineCursor(sessionId, consumerName),
+          streamId
+        );
       }
     }
   };

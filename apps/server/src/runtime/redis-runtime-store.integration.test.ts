@@ -50,8 +50,11 @@ test("redis runtime store persists snapshot and stream entries", async (context)
       }
     });
 
+    await store.engineCursors.save("session-redis-test", "engine-a", "1-0");
+
     assert.equal((await store.matches.getSnapshot("session-redis-test"))?.revision, 0);
     assert.equal((await store.streams.readCommands("session-redis-test", "0-0", 10)).length, 1);
+    assert.equal(await store.engineCursors.get("session-redis-test", "engine-a"), "1-0");
   } finally {
     await client.quit();
   }

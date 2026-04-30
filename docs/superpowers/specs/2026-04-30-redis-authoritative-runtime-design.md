@@ -105,6 +105,7 @@ Redis stores:
 - selector cache entries when useful.
 - idempotency records.
 - rate-limit counters.
+- engine command cursors for restart handoff.
 - temporary operational logs and benchmark samples.
 
 Redis does not store raw session tokens.

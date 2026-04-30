@@ -281,8 +281,10 @@ The runtime store defines these logical streams:
   - backend gateway writes command envelopes after auth and protocol validation
 - `bh:match:{sessionId}:events`
   - engine worker writes authoritative command results
+- `bh:match:{sessionId}:cursor:{consumerName}`
+  - engine worker stores the last processed command stream id for restart handoff
 
-The in-memory adapter uses the same port contract for local tests. The Redis adapter serializes records as JSON and stores command/event history in Redis Streams. Redis keys are prefixed so deployment environments can isolate Project. BH data.
+The in-memory adapter uses the same port contract for local tests. The Redis adapter serializes records as JSON, stores command/event history in Redis Streams, and stores engine cursors as small string records. Redis keys are prefixed so deployment environments can isolate Project. BH data.
 
 ## Request protection
 

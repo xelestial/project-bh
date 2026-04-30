@@ -11,6 +11,7 @@ import type {
 
 export interface EngineWorkerOptions {
   readonly store: RuntimeStore;
+  readonly consumerName?: string;
   readonly now?: () => string;
 }
 
@@ -43,7 +44,7 @@ function createEventEnvelope(input: {
 }
 
 export function createEngineWorker(options: EngineWorkerOptions): EngineWorker {
-  const lastStreamIds = new Map<string, string>();
+  const consumerName = options.consumerName ?? "default";
 
   async function appendIdempotentEvent(
     sessionId: string,
@@ -101,7 +102,8 @@ export function createEngineWorker(options: EngineWorkerOptions): EngineWorker {
   }
 
   async function processNextCommand(sessionId: string): Promise<boolean> {
-    const afterStreamId = lastStreamIds.get(sessionId) ?? "0-0";
+    const afterStreamId =
+      (await options.store.engineCursors.get(sessionId, consumerName)) ?? "0-0";
     const [entry]: readonly StreamEntry<CommandEnvelope>[] =
       await options.store.streams.readCommands(sessionId, afterStreamId, 1);
 
@@ -109,8 +111,12 @@ export function createEngineWorker(options: EngineWorkerOptions): EngineWorker {
       return false;
     }
 
-    lastStreamIds.set(sessionId, entry.streamId);
     await processCommandEnvelope(sessionId, entry.value);
+    await options.store.engineCursors.save(
+      sessionId,
+      consumerName,
+      entry.streamId
+    );
     return true;
   }
 

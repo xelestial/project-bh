@@ -44,9 +44,14 @@ export function createInMemoryRuntimeStore(): RuntimeStore {
   const eventStreams = new Map<string, StreamEntry<EventEnvelope>[]>();
   const idempotencyRecords = new Map<string, IdempotencyRecord>();
   const rateLimitCounters = new Map<string, { count: number; expiresAt: number }>();
+  const engineCursors = new Map<string, string>();
 
   function idempotencyKey(sessionId: string, commandId: string): string {
     return `${sessionId}:${commandId}`;
+  }
+
+  function engineCursorKey(sessionId: string, consumerName: string): string {
+    return `${sessionId}:${consumerName}`;
   }
 
   return {
@@ -174,6 +179,14 @@ export function createInMemoryRuntimeStore(): RuntimeStore {
         };
         rateLimitCounters.set(key, next);
         return next.count;
+      }
+    },
+    engineCursors: {
+      async get(sessionId, consumerName) {
+        return engineCursors.get(engineCursorKey(sessionId, consumerName)) ?? null;
+      },
+      async save(sessionId, consumerName, streamId) {
+        engineCursors.set(engineCursorKey(sessionId, consumerName), streamId);
       }
     }
   };

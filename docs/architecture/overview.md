@@ -94,5 +94,6 @@ Redis is infrastructure, not the rules engine. Domain and application packages s
 - engine-to-backend event streams
 - idempotency records keyed by command id
 - rate-limit counters
+- durable engine command cursors keyed by session and consumer name
 
 The HTTP/WebSocket process acts as a backend gateway. It authenticates a private `sessionToken`, injects the authoritative `playerId`, validates command payloads through `packages/protocol`, appends command envelopes, and returns selector-projected snapshots. The engine worker applies command envelopes through `handleMatchCommand`, persists the next canonical snapshot, writes event envelopes, and preserves idempotency for repeated `commandId` values.

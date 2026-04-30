@@ -134,3 +134,63 @@ test("engine worker treats repeated command ids as idempotent", async () => {
   assert.equal(events.length, 2);
   assert.equal(events[0]!.value.revision, events[1]!.value.revision);
 });
+
+test("engine worker resumes command cursor across worker instances", async () => {
+  const store = createInMemoryRuntimeStore();
+  const firstWorker = createEngineWorker({ store, consumerName: "engine-a" });
+  const secondWorker = createEngineWorker({ store, consumerName: "engine-a" });
+  const state = createMatchState({
+    matchId: "match-engine-cursor",
+    players: [
+      { id: "p1", name: "One" },
+      { id: "p2", name: "Two" }
+    ]
+  });
+
+  await store.matches.saveSnapshot({
+    sessionId: "session-engine-cursor",
+    state,
+    logLength: 0,
+    revision: 0
+  });
+
+  await store.streams.appendCommand("session-engine-cursor", {
+    commandId: "command-engine-cursor-1",
+    roomId: "room-engine",
+    playerId: "p1",
+    receivedAt: "2026-04-30T00:00:00.000Z",
+    payload: {
+      type: "match.submitAuctionBids",
+      version: 1,
+      matchId: "match-engine-cursor",
+      playerId: "p1",
+      bids: []
+    }
+  });
+  await store.streams.appendCommand("session-engine-cursor", {
+    commandId: "command-engine-cursor-2",
+    roomId: "room-engine",
+    playerId: "p2",
+    receivedAt: "2026-04-30T00:00:01.000Z",
+    payload: {
+      type: "match.submitAuctionBids",
+      version: 1,
+      matchId: "match-engine-cursor",
+      playerId: "p2",
+      bids: []
+    }
+  });
+
+  assert.equal(await firstWorker.processNextCommand("session-engine-cursor"), true);
+  assert.equal(await secondWorker.processNextCommand("session-engine-cursor"), true);
+
+  const snapshot = await store.matches.getSnapshot("session-engine-cursor");
+  const events = await store.streams.readEvents("session-engine-cursor", "0-0", 10);
+
+  assert.equal(snapshot?.revision, 2);
+  assert.equal(snapshot?.logLength, 2);
+  assert.deepEqual(
+    events.map((entry) => entry.value.commandId),
+    ["command-engine-cursor-1", "command-engine-cursor-2"]
+  );
+});

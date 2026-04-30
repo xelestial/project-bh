@@ -109,7 +109,7 @@ BH_BENCH_ROOMS=100 BH_BENCH_PLAYERS=4 BH_BENCH_COMMANDS=1 pnpm benchmark:online
 
 1. Golden fixtures for cross5 and rectangle6 rotation examples.
 2. Scenario fixtures for river, ice drop, elimination, and round-tick status behavior.
-3. Multi-process Redis fanout tests with a shared Redis service in CI.
+3. Redis-backed engine cursor/fanout tests with a shared Redis service in CI.
 4. Replay-oriented tests for full five-round command logs.
 5. UI component tests for the React playtest shell.
 6. Expand browser smoke coverage to include special-card targeting, fence purchase, and next-round progression.
