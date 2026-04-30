@@ -70,7 +70,7 @@ The current baseline now covers:
 - online-game benchmark harness for many rooms, players, commands, and optional WebSocket clients
 - granular selector contracts for `publicState`, `viewerPrivate`, and `turnHints`, with the existing React snapshot bundle composed from those smaller contracts
 - selector golden samples in `docs/fixtures/selectors/` for React and Unity parity checks
-- rule scenario golden samples in `docs/fixtures/rules/` for river formation, river movement blocking, and ice-triggered treasure drops
+- rule scenario golden samples in `docs/fixtures/rules/` for river formation, river movement blocking, ice-triggered treasure drops, elimination drops, and round-tick skip countdowns
 - rotation golden samples in `docs/fixtures/rotations/` for large-hammer cross5 and rectangle6 parity checks
 - replay export schema and compact command-log samples in `docs/fixtures/replays/`
 - explicit public/private snapshot boundaries
@@ -81,8 +81,8 @@ The current baseline now covers:
 
 ## Near-term build order
 
-1. Add elimination and round-tick status golden fixtures.
-2. Add Redis-backed reconnect and multi-process fanout tests to CI once a shared Redis service is available.
+1. Add Redis-backed reconnect and multi-process fanout tests to CI once a shared Redis service is available.
+2. Add React shell UI component tests around the playtest contract.
 
 The more detailed sequence now lives in `docs/planning/implementation-roadmap.md`.
 

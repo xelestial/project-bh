@@ -5,6 +5,7 @@ import test from "node:test";
 import { createTwoPlayerMatchFixture } from "../../testkit/src/index.ts";
 import {
   createPosition,
+  endTurn,
   moveActivePlayer,
   throwTile,
   type DomainEvent,
@@ -153,8 +154,126 @@ function createRiverMovementBlockScenario() {
   }
 }
 
+function createEliminationDropScenario() {
+  const match = createTwoPlayerMatchFixture({
+    treasures: [],
+    tiles: [{ position: createPosition(0, 1), kind: "electric" }]
+  });
+  const carrying: MatchState = {
+    ...match,
+    players: {
+      ...match.players,
+      "player-1": {
+        ...mustPlayer(match, "player-1"),
+        hitPoints: 3,
+        carriedTreasureId: "treasure-elimination"
+      }
+    },
+    treasures: {
+      "treasure-elimination": {
+        id: "treasure-elimination",
+        slot: 1,
+        ownerPlayerId: "player-1",
+        points: 1,
+        initialPosition: null,
+        position: null,
+        carriedByPlayerId: "player-1",
+        openedByPlayerId: null,
+        removedFromRound: false
+      }
+    }
+  };
+  const result = moveActivePlayer(carrying, "player-1", "south");
+  const eliminated = mustPlayer(result.state, "player-1");
+  const dropped = mustTreasure(result.state, "treasure-elimination");
+
+  return {
+    name: "lethal electric tile damage eliminates the player and drops carried treasure",
+    input: {
+      activePlayerId: "player-1",
+      move: "south",
+      electricPosition: createPosition(0, 1),
+      startingHitPoints: 3,
+      carriedTreasureId: "treasure-elimination"
+    },
+    output: {
+      playerPosition: eliminated.position,
+      hitPoints: eliminated.hitPoints,
+      eliminated: eliminated.eliminated,
+      carriedTreasureId: eliminated.carriedTreasureId,
+      treasurePosition: dropped.position,
+      treasureCarrier: dropped.carriedByPlayerId,
+      activePlayerId: result.state.round.activePlayerId,
+      turnStage: result.state.round.turn?.stage ?? null,
+      events: eventTypes(result.events)
+    }
+  };
+}
+
+function createRoundTickSkipScenario() {
+  const match = createTwoPlayerMatchFixture({
+    treasures: []
+  });
+  const stepped = moveActivePlayer(match, "player-1", "south").state;
+  const prepared: MatchState = {
+    ...stepped,
+    players: {
+      ...stepped.players,
+      "player-2": {
+        ...mustPlayer(stepped, "player-2"),
+        status: {
+          ...mustPlayer(stepped, "player-2").status,
+          skipNextTurnCount: 1
+        }
+      }
+    }
+  };
+  const result = endTurn(prepared, "player-1");
+  const skippedPlayer = mustPlayer(result.state, "player-2");
+
+  return {
+    name: "round tick consumes skipNextTurnCount and returns to the next eligible player",
+    input: {
+      endingPlayerId: "player-1",
+      skippedPlayerId: "player-2",
+      startingSkipCount: 1
+    },
+    output: {
+      skippedPlayerRemainingSkipCount: skippedPlayer.status.skipNextTurnCount,
+      activePlayerId: result.state.round.activePlayerId,
+      turnNumber: result.state.round.turnNumber,
+      turnStage: result.state.round.turn?.stage ?? null,
+      events: result.events.map((event) => {
+        if (event.type === "turnSkipped") {
+          return {
+            type: event.type,
+            playerId: event.playerId,
+            remainingSkipCount: event.remainingSkipCount,
+            turnNumber: event.turnNumber
+          };
+        }
+
+        if (event.type === "turnEnded") {
+          return {
+            type: event.type,
+            previousPlayerId: event.previousPlayerId,
+            nextPlayerId: event.nextPlayerId,
+            turnNumber: event.turnNumber
+          };
+        }
+
+        return {
+          type: event.type
+        };
+      })
+    }
+  };
+}
+
 test("rule scenario golden samples match the stable domain fixtures", () => {
   assert.deepEqual(createIceDropScenario(), loadGolden("ice-drop-carried-treasure.json"));
   assert.deepEqual(createRiverFormationScenario(), loadGolden("river-formation.json"));
   assert.deepEqual(createRiverMovementBlockScenario(), loadGolden("river-movement-block.json"));
+  assert.deepEqual(createEliminationDropScenario(), loadGolden("elimination-drops-treasure.json"));
+  assert.deepEqual(createRoundTickSkipScenario(), loadGolden("round-tick-skip-countdown.json"));
 });

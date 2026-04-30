@@ -40,7 +40,7 @@ Current coverage includes:
 - selector envelope tests for exact frontend payload boundaries
 - selector registry tests for public/viewer private-data separation
 - selector golden-sample tests that compare `docs/fixtures/selectors/*.json` with the stable two-player projection fixture
-- rule scenario golden-sample tests that compare `docs/fixtures/rules/*.json` with river and ice domain fixtures
+- rule scenario golden-sample tests that compare `docs/fixtures/rules/*.json` with river, ice, elimination, and round-tick status fixtures
 - rotation golden-sample tests that compare `docs/fixtures/rotations/*.json` with cross5 and rectangle6 large-hammer domain fixtures
 - replay schema tests that validate `docs/fixtures/replays/*.json` as durable external replay contracts
 - secure session-token tests for entropy, HMAC hashing, constant-time verification, and redaction
@@ -111,7 +111,6 @@ BH_BENCH_ROOMS=100 BH_BENCH_PLAYERS=4 BH_BENCH_COMMANDS=1 pnpm benchmark:online
 
 ## Planned next layers
 
-1. Scenario fixtures for elimination and round-tick status behavior.
-2. Redis-backed reconnect hydration and backend fanout tests with a shared Redis service in CI.
-3. UI component tests for the React playtest shell.
-4. Expand browser smoke coverage to include special-card targeting, fence purchase, and next-round progression.
+1. Redis-backed reconnect hydration and backend fanout tests with a shared Redis service in CI.
+2. UI component tests for the React playtest shell.
+3. Expand browser smoke coverage to include special-card targeting, fence purchase, and next-round progression.

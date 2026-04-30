@@ -1,0 +1,37 @@
+{
+  "name": "lethal electric tile damage eliminates the player and drops carried treasure",
+  "input": {
+    "activePlayerId": "player-1",
+    "move": "south",
+    "electricPosition": {
+      "x": 0,
+      "y": 1
+    },
+    "startingHitPoints": 3,
+    "carriedTreasureId": "treasure-elimination"
+  },
+  "output": {
+    "playerPosition": {
+      "x": 0,
+      "y": 1
+    },
+    "hitPoints": 0,
+    "eliminated": true,
+    "carriedTreasureId": null,
+    "treasurePosition": {
+      "x": 0,
+      "y": 1
+    },
+    "treasureCarrier": null,
+    "activePlayerId": "player-2",
+    "turnStage": "mandatoryStep",
+    "events": [
+      "playerMoved",
+      "playerDamaged",
+      "playerEliminated",
+      "treasureDropped",
+      "turnStageChanged",
+      "turnEnded"
+    ]
+  }
+}

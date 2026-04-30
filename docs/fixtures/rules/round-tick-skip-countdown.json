@@ -1,0 +1,28 @@
+{
+  "name": "round tick consumes skipNextTurnCount and returns to the next eligible player",
+  "input": {
+    "endingPlayerId": "player-1",
+    "skippedPlayerId": "player-2",
+    "startingSkipCount": 1
+  },
+  "output": {
+    "skippedPlayerRemainingSkipCount": 0,
+    "activePlayerId": "player-1",
+    "turnNumber": 3,
+    "turnStage": "mandatoryStep",
+    "events": [
+      {
+        "type": "turnEnded",
+        "previousPlayerId": "player-1",
+        "nextPlayerId": "player-1",
+        "turnNumber": 3
+      },
+      {
+        "type": "turnSkipped",
+        "playerId": "player-2",
+        "remainingSkipCount": 0,
+        "turnNumber": 2
+      }
+    ]
+  }
+}
