@@ -434,12 +434,12 @@ class CdpPage {
     return text;
   }
 
-  async setViewport(width: number, height: number): Promise<void> {
+  async setViewport(width: number, height: number, mobile = false): Promise<void> {
     await this.send("Emulation.setDeviceMetricsOverride", {
       width,
       height,
       deviceScaleFactor: 1,
-      mobile: false
+      mobile
     });
   }
 }
@@ -449,10 +449,15 @@ interface MatchLayoutMetrics {
   readonly boardArea: number;
   readonly boardRatio: number;
   readonly boardStageRatio: number;
+  readonly boardTop: number;
   readonly topHudHeight: number;
   readonly topChromeHeight: number;
+  readonly bottomSheetHeight: number;
+  readonly hasMobileResourceTabs: boolean;
+  readonly hasHorizontalOverflow: boolean;
   readonly boardIntersectsCallout: boolean;
   readonly minimumPlayerTextSize: number;
+  readonly topStatusText: string;
 }
 
 async function readMatchLayoutMetrics(page: CdpPage): Promise<MatchLayoutMetrics> {
@@ -486,6 +491,7 @@ async function readMatchLayoutMetrics(page: CdpPage): Promise<MatchLayoutMetrics
       const topStrip = rect('.top-strip');
       const score = rect('.scoreboard-strip');
       const treasure = rect('.treasure-slot-strip');
+      const bottomSheet = rect('.match-footer');
       const topHudHeight = [topStrip, score].reduce((total, item) => total + (item?.height ?? 0), 0);
       const topChromeHeight = [topStrip, score, treasure].reduce((total, item) => total + (item?.height ?? 0), 0);
       const viewportArea = window.innerWidth * window.innerHeight;
@@ -497,17 +503,34 @@ async function readMatchLayoutMetrics(page: CdpPage): Promise<MatchLayoutMetrics
         boardArea,
         boardRatio: boardArea / viewportArea,
         boardStageRatio: stageArea > 0 ? boardArea / stageArea : 0,
+        boardTop: board?.top ?? 0,
         topHudHeight,
         topChromeHeight,
+        bottomSheetHeight: bottomSheet?.height ?? 0,
+        hasMobileResourceTabs: Boolean(document.querySelector('[data-testid="mobile-resource-tabs"]')),
+        hasHorizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
         boardIntersectsCallout: intersects(board, callout),
         minimumPlayerTextSize: Math.min(
           fontSize('.board-meta'),
           fontSize('.inventory-section h3'),
           fontSize('.stat-pill-value')
-        )
+        ),
+        topStatusText: document.querySelector('.top-strip')?.textContent ?? ''
       };
     })()
   `);
+}
+
+function assertMatchLayoutSupportsPrimaryDesktop(metrics: MatchLayoutMetrics): void {
+  assert.ok(
+    metrics.boardRatio >= 0.4,
+    `expected board to occupy at least 40% of 1920x1080 viewport, got ${(metrics.boardRatio * 100).toFixed(1)}%`
+  );
+  assert.ok(
+    metrics.topHudHeight <= 112,
+    `expected primary desktop top HUD to stay at or below 112px, got ${metrics.topHudHeight.toFixed(0)}px`
+  );
+  assert.equal(metrics.boardIntersectsCallout, false, "phase guidance must not overlap the board on primary desktop");
 }
 
 function assertMatchLayoutSupportsSmallDesktop(metrics: MatchLayoutMetrics): void {
@@ -531,6 +554,21 @@ function assertMatchLayoutSupportsSmallDesktop(metrics: MatchLayoutMetrics): voi
   assert.ok(
     metrics.minimumPlayerTextSize >= 12,
     `expected player-facing compact text to be at least 12px, got ${metrics.minimumPlayerTextSize.toFixed(2)}px`
+  );
+}
+
+function assertMatchLayoutSupportsMobile(metrics: MatchLayoutMetrics): void {
+  assert.equal(metrics.hasMobileResourceTabs, true, "mobile match layout should expose bottom sheet resource tabs");
+  assert.equal(metrics.hasHorizontalOverflow, false, "mobile match layout must not create horizontal page overflow");
+  assert.ok(metrics.boardTop < 360, `expected mobile board to appear before deep inventory content, got top ${metrics.boardTop.toFixed(0)}px`);
+  assert.ok(
+    metrics.bottomSheetHeight <= 844 * 0.45,
+    `expected mobile bottom sheet to stay within 45% viewport height, got ${metrics.bottomSheetHeight.toFixed(0)}px`
+  );
+  assert.equal(
+    /treasurePlacement|prioritySubmission|inTurn|Phase|Turn/.test(metrics.topStatusText),
+    false,
+    `expected top status to use player-facing localized labels, got ${JSON.stringify(metrics.topStatusText)}`
   );
 }
 
@@ -573,6 +611,46 @@ async function submitCurrentAuctionBid(page: CdpPage): Promise<void> {
   `);
 
   assert.equal(submitted, true, "Expected current auction bid to submit through the browser session.");
+}
+
+async function submitPriorityCard(page: CdpPage, priorityCard: number): Promise<void> {
+  const submitted = await page.evaluate<boolean>(`
+    (async () => {
+      const activeSession = JSON.parse(sessionStorage.getItem('project-bh.active-session') ?? 'null');
+
+      if (!activeSession) {
+        return false;
+      }
+
+      const roomResponse = await fetch('/api/rooms/' + activeSession.roomId + '?sessionToken=' + encodeURIComponent(activeSession.sessionToken));
+
+      if (!roomResponse.ok) {
+        return false;
+      }
+
+      const envelope = await roomResponse.json();
+
+      if (!envelope.snapshot?.state?.matchId) {
+        return false;
+      }
+
+      const commandResponse = await fetch('/api/rooms/' + activeSession.roomId + '/commands', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          version: 1,
+          matchId: envelope.snapshot.state.matchId,
+          sessionToken: activeSession.sessionToken,
+          type: 'match.submitPriority',
+          priorityCard: ${priorityCard}
+        })
+      });
+
+      return commandResponse.ok;
+    })()
+  `);
+
+  assert.equal(submitted, true, `Expected priority card ${priorityCard} to submit through the browser session.`);
 }
 
 async function placeTreasure(page: CdpPage, treasureId: string, cell: string): Promise<void> {
@@ -691,18 +769,35 @@ test(
 
       await hostPage.waitForExpression(
         `document.querySelector('[data-screen="match"]') !== null &&
-          document.querySelector('[data-testid="round-phase"]')?.textContent?.includes('treasurePlacement') === true`,
+          document.querySelector('[data-screen="match"]')?.getAttribute('data-round-phase') === 'treasurePlacement'`,
         "host treasure placement phase",
         20_000
       );
       await guestPage.waitForExpression(
         `document.querySelector('[data-screen="match"]') !== null &&
-          document.querySelector('[data-testid="round-phase"]')?.textContent?.includes('treasurePlacement') === true`,
+          document.querySelector('[data-screen="match"]')?.getAttribute('data-round-phase') === 'treasurePlacement'`,
         "guest treasure placement phase",
         20_000
       );
 
       assertMatchLayoutSupportsSmallDesktop(await readMatchLayoutMetrics(hostPage));
+      await hostPage.setViewport(1920, 1080);
+      await hostPage.waitForExpression(
+        `document.querySelector('.board')?.getBoundingClientRect().width > 900`,
+        "primary desktop board resize"
+      );
+      assertMatchLayoutSupportsPrimaryDesktop(await readMatchLayoutMetrics(hostPage));
+      await hostPage.setViewport(390, 844, true);
+      await hostPage.waitForExpression(
+        `window.innerWidth === 390 && document.querySelector('[data-screen="match"]') !== null`,
+        "mobile match resize"
+      );
+      assertMatchLayoutSupportsMobile(await readMatchLayoutMetrics(hostPage));
+      await hostPage.setViewport(1280, 720);
+      await hostPage.waitForExpression(
+        `document.querySelector('.board')?.getBoundingClientRect().width > 600`,
+        "small desktop board restore"
+      );
 
       const hostTreasureIds = await hostPage.evaluate<readonly string[]>(`
         [...document.querySelectorAll('[data-testid="treasure-card-button"]')].map((element) =>
@@ -731,12 +826,12 @@ test(
       }
 
       await hostPage.waitForExpression(
-        `document.querySelector('[data-testid="round-phase"]')?.textContent?.includes('auction') === true`,
+        `document.querySelector('[data-screen="match"]')?.getAttribute('data-round-phase') === 'auction'`,
         "host auction phase",
         20_000
       );
       await guestPage.waitForExpression(
-        `document.querySelector('[data-testid="round-phase"]')?.textContent?.includes('auction') === true`,
+        `document.querySelector('[data-screen="match"]')?.getAttribute('data-round-phase') === 'auction'`,
         "guest auction phase",
         20_000
       );
@@ -763,21 +858,21 @@ test(
       assert.deepEqual(revealedOffers, ["냉기 폭탄", "화염 폭탄", "전기 폭탄", "대형 망치"]);
 
       await hostPage.waitForExpression(
-        `document.querySelector('[data-testid="round-phase"]')?.textContent?.includes('prioritySubmission') === true`,
+        `document.querySelector('[data-screen="match"]')?.getAttribute('data-round-phase') === 'prioritySubmission'`,
         "host priority phase",
         20_000
       );
       await guestPage.waitForExpression(
-        `document.querySelector('[data-testid="round-phase"]')?.textContent?.includes('prioritySubmission') === true`,
+        `document.querySelector('[data-screen="match"]')?.getAttribute('data-round-phase') === 'prioritySubmission'`,
         "guest priority phase",
         20_000
       );
 
-      await hostPage.clickSelector('[data-priority-card="6"]');
-      await guestPage.clickSelector('[data-priority-card="5"]');
+      await submitPriorityCard(hostPage, 6);
+      await submitPriorityCard(guestPage, 5);
 
       await hostPage.waitForExpression(
-        `document.querySelector('[data-testid="round-phase"]')?.textContent?.includes('inTurn') === true &&
+        `document.querySelector('[data-screen="match"]')?.getAttribute('data-round-phase') === 'inTurn' &&
           document.querySelector('[data-testid="turn-stage"]')?.textContent?.includes('1칸 이동') === true`,
         "host in-turn mandatory step",
         20_000

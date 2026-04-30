@@ -7,6 +7,7 @@ import type {
 } from "../../../packages/protocol/src/index.ts";
 import {
   SPECIAL_CARD_TYPES,
+  type RoundPhase,
   type SpecialCardType
 } from "../../../packages/domain/src/index.ts";
 import {
@@ -26,6 +27,7 @@ import {
 type RoomStatus = "lobby" | "started";
 type RoomVisibility = "public" | "private";
 type TurnStage = "mandatoryStep" | "secondaryAction";
+type MobileResourceTab = "actions" | "hand" | "players" | "treasures";
 
 interface RoomPlayer {
   id: string;
@@ -100,7 +102,7 @@ interface ProjectedSnapshot {
     };
     round: {
       roundNumber: number;
-      phase: string;
+      phase: RoundPhase;
       activePlayerId: string | null;
       turnOrder: string[];
       turn: {
@@ -484,6 +486,34 @@ function formatTurnStage(stage: TurnStage | null): string {
   }
 }
 
+function formatRoundPhase(phase: RoundPhase): string {
+  switch (phase) {
+    case "treasurePlacement":
+      return "보물 배치";
+    case "auction":
+      return "경매";
+    case "prioritySubmission":
+      return "우선권 제출";
+    case "inTurn":
+      return "턴 진행";
+    case "completed":
+      return "라운드 종료";
+  }
+}
+
+function getDefaultMobileResourceTab(phase: RoundPhase): MobileResourceTab {
+  switch (phase) {
+    case "treasurePlacement":
+    case "prioritySubmission":
+      return "hand";
+    case "completed":
+      return "treasures";
+    case "auction":
+    case "inTurn":
+      return "actions";
+  }
+}
+
 const SPECIAL_CARD_LABELS: Readonly<Record<SpecialCardType, string>> = {
   coldBomb: "냉기 폭탄",
   flameBomb: "화염 폭탄",
@@ -604,7 +634,7 @@ function MatchPhaseCallout(props: {
   if (isTreasurePlacement) {
     return (
       <section className="phase-callout phase-callout-treasure" data-testid="phase-callout">
-        <span className="phase-callout-kicker">Treasure Placement</span>
+        <span className="phase-callout-kicker">보물 배치</span>
         <div className="phase-callout-copy">
           <strong>우클릭해서 보물을 배치하세요</strong>
           <p>
@@ -620,7 +650,7 @@ function MatchPhaseCallout(props: {
   if (isPrioritySubmission) {
     return (
       <section className="phase-callout phase-callout-priority" data-testid="phase-callout">
-        <span className="phase-callout-kicker">Priority Submission</span>
+        <span className="phase-callout-kicker">우선권 제출</span>
         <div className="phase-callout-copy">
           <strong>우선권 카드를 제출하세요</strong>
           <p>{getPriorityCalloutDetail(props.snapshot)}</p>
@@ -634,7 +664,7 @@ function MatchPhaseCallout(props: {
       className="phase-callout phase-callout-turn phase-callout-ephemeral"
       data-testid="phase-callout"
     >
-      <span className="phase-callout-kicker">Your Turn</span>
+      <span className="phase-callout-kicker">내 차례</span>
       <div className="phase-callout-copy">
         <strong>당신의 차례입니다</strong>
         <p>{getTurnCalloutDetail(props.snapshot)}</p>
@@ -759,6 +789,34 @@ function RecentRoomsPanel(props: {
         ))}
       </div>
     </section>
+  );
+}
+
+function MobileResourceTabs(props: {
+  activeTab: MobileResourceTab;
+  onChangeTab: (tab: MobileResourceTab) => void;
+}) {
+  const tabs: readonly { tab: MobileResourceTab; label: string }[] = [
+    { tab: "actions", label: "행동" },
+    { tab: "hand", label: "손패" },
+    { tab: "players", label: "플레이어" },
+    { tab: "treasures", label: "보물" }
+  ];
+
+  return (
+    <nav className="mobile-resource-tabs" data-testid="mobile-resource-tabs" aria-label="모바일 정보 탭">
+      {tabs.map((item) => (
+        <button
+          key={item.tab}
+          type="button"
+          className={props.activeTab === item.tab ? "is-active" : ""}
+          aria-pressed={props.activeTab === item.tab}
+          onClick={() => props.onChangeTab(item.tab)}
+        >
+          {item.label}
+        </button>
+      ))}
+    </nav>
   );
 }
 
@@ -1418,6 +1476,7 @@ export function App() {
   const [pendingAction, setPendingAction] = useState<PendingCellAction | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [interactionMode, setInteractionMode] = useState<"rotate" | null>(null);
+  const [mobileResourceTab, setMobileResourceTab] = useState<MobileResourceTab>("actions");
   const [selectedRotationOrigin, setSelectedRotationOrigin] = useState<{ x: number; y: number } | null>(null);
   const [hoveredRotationOrigin, setHoveredRotationOrigin] = useState<{ x: number; y: number } | null>(null);
   const [boardViewportSize, setBoardViewportSize] = useState<number | null>(null);
@@ -1444,6 +1503,14 @@ export function App() {
   const rotationOrigins = interactionMode === "rotate" ? turnHints?.rotationOrigins ?? [] : [];
   const rotationPreviewOrigin = selectedRotationOrigin ?? hoveredRotationOrigin;
   const rotationPreviewCells = interactionMode === "rotate" ? getSquare2PreviewCells(rotationPreviewOrigin) : [];
+
+  useEffect(() => {
+    if (!snapshot) {
+      return;
+    }
+
+    setMobileResourceTab(getDefaultMobileResourceTab(snapshot.state.round.phase));
+  }, [snapshot?.state.round.phase]);
 
   useLayoutEffect(() => {
     if (!snapshot || room?.status !== "started") {
@@ -2044,30 +2111,30 @@ export function App() {
         <section className="hero-row">
           <div>
             <p className="eyebrow">Project. BH</p>
-            <h1>Party-first Multiplayer Lobby</h1>
-            <p className="lede">상용 게임처럼 초대 링크나 초대 코드로 바로 합류할 수 있게 정리한 로비입니다.</p>
+            <h1>Project. BH 온라인 매치</h1>
+            <p className="lede">방을 만들거나 초대 코드로 바로 합류하세요.</p>
           </div>
           {message ? <div className="message">{message}</div> : shareMessage ? <div className="message">{shareMessage}</div> : null}
         </section>
 
         <section className="lobby-grid">
           <div className="panel">
-            <h2>Host A Party</h2>
+            <h2>방 만들기</h2>
             <label>
-              Display name
+              표시 이름
               <input data-testid="host-name-input" value={name} onChange={(event) => setName(event.target.value)} />
             </label>
             <label>
-              Party name
+              방 이름
               <input
                 data-testid="room-name-input"
                 value={roomName}
-                placeholder={`${name.trim() || "Host"}'s party`}
+                placeholder={`${name.trim() || "Host"}의 방`}
                 onChange={(event) => setRoomName(event.target.value)}
               />
             </label>
             <label>
-              Party size
+              인원
               <select value={playerCount} onChange={(event) => setPlayerCount(event.target.value)}>
                 <option value="4">4</option>
                 <option value="3">3</option>
@@ -2075,30 +2142,30 @@ export function App() {
               </select>
             </label>
             <label>
-              Visibility
+              공개 설정
               <select
                 data-testid="room-visibility-input"
                 value={roomVisibility}
                 onChange={(event) => setRoomVisibility(event.target.value as RoomVisibility)}
               >
-                <option value="public">Public lobby</option>
-                <option value="private">Private invite only</option>
+                <option value="public">공개 로비</option>
+                <option value="private">초대 전용</option>
               </select>
             </label>
             <button data-testid="create-party-button" disabled={!name.trim()} onClick={() => void createRoom()}>
-              Create Party
+              방 만들기
             </button>
-            <p className="panel-note">공개 방은 Open Parties에 노출되고, 비공개 방은 초대 링크와 코드로만 참가할 수 있습니다.</p>
+            <p className="panel-note">공개 방은 목록에 보이고, 초대 전용 방은 링크와 코드로만 참가할 수 있습니다.</p>
           </div>
 
           <div className="panel">
-            <h2>Join By Invite</h2>
+            <h2>초대로 참가</h2>
             <label>
-              Display name
+              표시 이름
               <input data-testid="join-name-input" value={name} onChange={(event) => setName(event.target.value)} />
             </label>
             <label>
-              Invite code
+              초대 코드
               <input
                 data-testid="invite-code-input"
                 value={inviteCode}
@@ -2115,25 +2182,25 @@ export function App() {
                 disabled={inviteCode.length !== 6}
                 onClick={() => void previewInvite(inviteCode)}
               >
-                Preview Room
+                방 확인
               </button>
               <button
                 data-testid="join-party-button"
                 disabled={!name.trim() || inviteCode.length !== 6}
                 onClick={() => void joinRoom()}
               >
-                Join Party
+                참가하기
               </button>
             </div>
             {invitePreview ? (
               <div className="invite-preview-card">
                 <strong>{invitePreview.roomName}</strong>
-                <span>{invitePreview.visibility === "public" ? `Invite ${invitePreview.inviteCode}` : "Private invite only"}</span>
-                <span>{invitePreview.players.length}/{invitePreview.desiredPlayerCount} players joined</span>
-                <span>{invitePreview.status === "lobby" ? "Ready to join" : "Match already started"}</span>
+                <span>{invitePreview.visibility === "public" ? `초대 ${invitePreview.inviteCode}` : "초대 전용"}</span>
+                <span>{invitePreview.players.length}/{invitePreview.desiredPlayerCount}명 참가</span>
+                <span>{invitePreview.status === "lobby" ? "참가 가능" : "이미 시작됨"}</span>
               </div>
             ) : (
-              <p className="panel-note">초대 링크를 열면 코드가 자동으로 채워집니다. 코드는 입력이 아니라 붙여넣기 기준으로 설계했습니다.</p>
+              <p className="panel-note">초대 링크를 열면 코드가 자동으로 채워집니다.</p>
             )}
           </div>
 
@@ -2256,16 +2323,16 @@ export function App() {
       <header className="top-strip">
         <div className="title-row">
           <p className="eyebrow">Project. BH</p>
-          <strong>Room {room.roomId}</strong>
-          {snapshot ? <span>Round {snapshot.state.round.roundNumber}/{snapshot.state.settings.totalRounds}</span> : null}
-          {snapshot ? <span data-testid="round-phase">Phase {snapshot.state.round.phase}</span> : null}
-          {snapshot ? <span data-testid="turn-stage">Turn {formatTurnStage(snapshot.viewer.turnHints.stage)}</span> : null}
+          <strong>방 {room.roomId}</strong>
+          {snapshot ? <span>라운드 {snapshot.state.round.roundNumber}/{snapshot.state.settings.totalRounds}</span> : null}
+          {snapshot ? <span data-testid="round-phase">단계 {formatRoundPhase(snapshot.state.round.phase)}</span> : null}
+          {snapshot ? <span data-testid="turn-stage">턴 {formatTurnStage(snapshot.viewer.turnHints.stage)}</span> : null}
           {pendingLabel ? <span className="pending-chip">{pendingLabel}</span> : null}
         </div>
 
         <div className="title-row compact-actions">
-          <span>You: {getRoomPlayerName(room, playerId)}</span>
-          <button onClick={() => void refreshRoom()}>Refresh</button>
+          <span>나: {getRoomPlayerName(room, playerId)}</span>
+          <button onClick={() => void refreshRoom()}>새로고침</button>
           {message ? <span className="message-inline">{message}</span> : null}
         </div>
       </header>
@@ -2396,7 +2463,9 @@ export function App() {
           ) : null}
           </section>
 
-          <footer className="bottom-overlay match-footer">
+          <footer className="bottom-overlay match-footer" data-active-resource-tab={mobileResourceTab}>
+            <MobileResourceTabs activeTab={mobileResourceTab} onChangeTab={setMobileResourceTab} />
+
             {snapshot.state.round.phase === "inTurn" || snapshot.state.round.phase === "prioritySubmission" ? (
               <section className="overlay-section footer-action-status">
                 <ActionStatusStrip
@@ -2413,6 +2482,29 @@ export function App() {
                 />
               </section>
             ) : null}
+
+            <section className="overlay-section mobile-sheet-panel mobile-sheet-actions">
+              <ActionStatusStrip
+                snapshot={snapshot}
+                isMyTurn={Boolean(isMyTurn)}
+                rotationMode={interactionMode === "rotate"}
+                onToggleRotationMode={() => {
+                  setContextMenu(null);
+                  setSelectedRotationOrigin(null);
+                  setHoveredRotationOrigin(null);
+                  setInteractionMode((current) => (current === "rotate" ? null : "rotate"));
+                  setMessage("");
+                }}
+              />
+            </section>
+
+            <section className="overlay-section mobile-sheet-panel mobile-sheet-players">
+              <Scoreboard snapshot={snapshot} />
+            </section>
+
+            <section className="overlay-section mobile-sheet-panel mobile-sheet-treasures">
+              <TreasureBoardStrip snapshot={snapshot} />
+            </section>
 
             <section className="overlay-section inventory-section">
               <div className="inventory-group inventory-group-priority">
