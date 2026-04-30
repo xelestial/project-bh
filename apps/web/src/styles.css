@@ -1903,7 +1903,9 @@ label {
   position: relative;
   z-index: 321;
   pointer-events: auto;
-  width: min(calc(var(--tile-width, 28px) * 10), calc(100% - 1rem));
+  width: min(42rem, calc(100% - 1rem));
+  max-height: calc(100% - 1rem);
+  overflow: auto;
   display: grid;
   gap: 0.7rem;
   padding: 1rem 1.05rem;
