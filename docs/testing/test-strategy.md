@@ -82,8 +82,10 @@ pnpm typecheck
 Run the optional Redis integration test with:
 
 ```bash
-REDIS_URL=redis://127.0.0.1:6379 pnpm test -- apps/server/src/runtime/redis-runtime-store.integration.test.ts
+REDIS_URL=redis://127.0.0.1:6379 pnpm test:redis-runtime
 ```
+
+The same Redis-backed runtime suite runs in `.github/workflows/redis-runtime.yml`.
 
 Run the online-game benchmark smoke test with:
 
@@ -111,6 +113,5 @@ BH_BENCH_ROOMS=100 BH_BENCH_PLAYERS=4 BH_BENCH_COMMANDS=1 pnpm benchmark:online
 
 ## Planned next layers
 
-1. Redis-backed reconnect hydration and backend fanout tests with a shared Redis service in CI.
-2. UI component tests for the React playtest shell.
-3. Expand browser smoke coverage to include special-card targeting, fence purchase, and next-round progression.
+1. UI component tests for the React playtest shell.
+2. Expand browser smoke coverage to include special-card targeting, fence purchase, and next-round progression.

@@ -81,8 +81,8 @@ The current baseline now covers:
 
 ## Near-term build order
 
-1. Add Redis-backed reconnect and multi-process fanout tests to CI once a shared Redis service is available.
-2. Add React shell UI component tests around the playtest contract.
+1. Add React shell UI component tests around the playtest contract.
+2. Expand browser smoke coverage for special-card targeting, fence purchase, and next-round progression.
 
 The more detailed sequence now lives in `docs/planning/implementation-roadmap.md`.
 
