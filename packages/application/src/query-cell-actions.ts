@@ -22,6 +22,8 @@ import {
 } from "../../protocol/src/action-query-schema.ts";
 import { listLegalNormalRotationDirections } from "./rotation-candidates.ts";
 
+const SECONDARY_MOVE_DISTANCE = 2;
+
 function tryCommand(
   run: () => void
 ): boolean {
@@ -447,21 +449,19 @@ export function queryCellActions(
     return actions;
   }
 
-  const dx = cell.x - player.position.x;
-  const dy = cell.y - player.position.y;
+  const moveDistance = cardinalLineDistance(player.position, cell);
+  const moveDirection = cardinalDirectionBetween(player.position, cell);
+  const expectedMoveDistance =
+    match.round.turn?.playerId === playerId && match.round.turn.stage === "secondaryAction"
+      ? SECONDARY_MOVE_DISTANCE
+      : 1;
 
-  if (Math.abs(dx) + Math.abs(dy) === 1) {
-    const direction =
-      dx === 1 ? "east" :
-      dx === -1 ? "west" :
-      dy === 1 ? "south" :
-      "north";
-
-    if (tryCommand(() => moveActivePlayer(match, playerId, direction))) {
+  if (moveDirection && moveDistance === expectedMoveDistance) {
+    if (tryCommand(() => moveActivePlayer(match, playerId, moveDirection))) {
       actions.push(
-        createCommandAction("move-player", "이동하기", {
+        createCommandAction("move-player", expectedMoveDistance === 1 ? "1칸 이동하기" : "2칸 이동하기", {
           type: "match.movePlayer",
-          direction
+          direction: moveDirection
         })
       );
     }

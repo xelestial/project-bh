@@ -78,7 +78,7 @@ Expected result in a normal local shell:
 - it creates a host room and joins with a second browser session
 - it places all treasure cards through the right-click menu
 - it verifies auction cards reveal one at a time
-- it submits priority cards and confirms right-click movement enters the secondary action stage
+- it submits priority cards and confirms the 1-tile mandatory move enters the 2-tile secondary action stage
 
 Environment note:
 
@@ -137,7 +137,7 @@ Use this short path for every fresh manual run:
 6. Verify only one auction card is shown at a time and the next card appears after the previous one resolves.
 7. Submit priority cards from both players.
 8. Verify the active player matches the resolved priority order.
-9. Right-click cells to move, rotate, throw, or use selected special cards. Use the bottom inventory overlay to confirm remaining special-card charges decrease after use.
+9. Right-click cells to move, rotate, throw, or use selected special cards. Confirm the mandatory step is 1 tile and the optional movement action is 2 straight-line tiles. Use the bottom inventory overlay to confirm remaining special-card charges decrease after use.
 10. End turn and verify the other client receives the same active-player update.
 11. When a round completes, press `다음 라운드`.
 
@@ -159,7 +159,7 @@ The automated smoke test covers steps 1 through 7 for the current shell.
 - sequential auction bidding
 - priority-card submission
 - right-click cell action query
-- one-step movement
+- mandatory 1-tile movement plus optional 2-tile secondary movement
 - tile throw
 - square2 rotation and large-hammer cross5/rectangle6 rotation
 - special card targeting from the bottom overlay

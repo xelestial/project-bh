@@ -66,9 +66,8 @@ test("turn affordances hide no-op normal rotations after the first move", () => 
   assert.equal(result.availableSecondaryActions.endTurn, true);
   assert.deepEqual(result.rotationOrigins, []);
   assert.deepEqual(result.secondaryMoveTargets, [
-    { x: 0, y: 0 },
-    { x: 1, y: 1 },
-    { x: 0, y: 2 }
+    { x: 2, y: 1 },
+    { x: 0, y: 3 }
   ]);
 });
 

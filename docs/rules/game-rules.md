@@ -47,9 +47,10 @@ The current codebase implements the following rule-backed behavior.
 - Each active turn currently has:
   - one mandatory movement step
   - one secondary slot that may be spent on either:
-    - one additional movement step
+    - one straight-line two-tile movement action
     - one board action
 - The mandatory step must happen before the secondary slot can be spent on `movePlayer`, `endTurn`, `throwTile`, `rotateTiles`, `useSpecialCard`, or `openTreasure`.
+- The secondary movement action uses the same `movePlayer` command shape as the mandatory step, but resolves as exactly two straight-line tiles in the chosen direction.
 - An unopened treasure on the destination tile is picked up immediately.
 - Picking up a treasure ends the current turn immediately.
 - A carried treasure blocks throw and rotate actions.

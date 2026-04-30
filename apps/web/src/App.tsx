@@ -577,11 +577,11 @@ function getTurnCalloutDetail(snapshot: ProjectedSnapshot): string {
   const stage = snapshot.viewer.turnHints.stage;
 
   if (stage === "mandatoryStep") {
-    return "먼저 1칸 이동한 뒤 추가 이동 또는 행동을 선택하세요.";
+    return "먼저 1칸 이동한 뒤 2칸 이동 또는 행동을 선택하세요.";
   }
 
   if (stage === "secondaryAction") {
-    return "이동, 타일, 회전, 특수카드, 보물 열기 중 가능한 행동을 선택할 수 있습니다.";
+    return "2칸 이동, 타일, 회전, 특수카드, 보물 열기 중 가능한 행동을 선택할 수 있습니다.";
   }
 
   return "이번 턴의 행동을 시작하세요.";
@@ -671,11 +671,11 @@ function ActionStatusStrip(props: {
           : "선행 조건"
     },
     {
-      label: "추가 이동",
+      label: "2칸 이동",
       enabled: turnHints.availableSecondaryActions.move,
       current: false,
       detail: turnHints.availableSecondaryActions.move
-        ? `${turnHints.secondaryMoveTargets.length}칸 가능`
+        ? `${turnHints.secondaryMoveTargets.length}곳 가능`
         : "잠김"
     },
     {

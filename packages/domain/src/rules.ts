@@ -51,10 +51,12 @@ import {
   isSamePosition,
   isWithinBoard,
   movePosition,
+  movePositionByDistance,
   positionKey
 } from "./position.ts";
 
 const THROWABLE_TILE_KINDS: readonly TileKind[] = ["fire", "water", "electric"];
+const SECONDARY_MOVE_DISTANCE = 2;
 
 export interface DomainMutationResult {
   readonly state: MatchState;
@@ -220,6 +222,42 @@ function assertActivePlayer(match: MatchState, playerId: PlayerId): PlayerState 
 
 function isSecondaryMovementAvailable(player: PlayerState): boolean {
   return player.status.movementLimit === null || player.status.movementLimit > 1;
+}
+
+function getMoveDistanceForStage(stage: TurnStage): number {
+  return stage === "secondaryAction" ? SECONDARY_MOVE_DISTANCE : 1;
+}
+
+function collectMovePath(
+  from: Position,
+  direction: Direction,
+  distance: number
+): readonly Position[] {
+  return Array.from({ length: distance }, (_, index) =>
+    movePositionByDistance(from, direction, index + 1)
+  );
+}
+
+function assertMovePathEnterable(match: MatchState, path: readonly Position[]): void {
+  for (const position of path) {
+    if (!isWithinBoard(position)) {
+      throw new DomainError("OUT_OF_BOUNDS", "Players cannot move outside the board.");
+    }
+
+    if (isFenceBlockingPosition(match.board, position)) {
+      throw new DomainError(
+        "MOVEMENT_BLOCKED_BY_FENCE",
+        "Players cannot move onto fenced tiles."
+      );
+    }
+
+    if (getTileKind(match.board, position) === "river") {
+      throw new DomainError(
+        "MOVEMENT_BLOCKED_BY_FENCE",
+        "River tiles cannot be entered without a dedicated jump rule."
+      );
+    }
+  }
 }
 
 function assertMovementTurn(
@@ -1027,25 +1065,15 @@ export function moveActivePlayer(
   direction: Direction
 ): DomainMutationResult {
   const { player, stage } = assertMovementTurn(match, playerId);
-  const nextPosition = movePosition(player.position, direction);
+  const moveDistance = getMoveDistanceForStage(stage);
+  const movePath = collectMovePath(player.position, direction, moveDistance);
+  const nextPosition = movePath[movePath.length - 1];
 
-  if (!isWithinBoard(nextPosition)) {
-    throw new DomainError("OUT_OF_BOUNDS", "Players cannot move outside the board.");
+  if (!nextPosition) {
+    throw new DomainError("INVALID_POSITION", "Movement distance must be positive.");
   }
 
-  if (isFenceBlockingPosition(match.board, nextPosition)) {
-    throw new DomainError(
-      "MOVEMENT_BLOCKED_BY_FENCE",
-      "Players cannot move onto fenced tiles."
-    );
-  }
-
-  if (getTileKind(match.board, nextPosition) === "river") {
-    throw new DomainError(
-      "MOVEMENT_BLOCKED_BY_FENCE",
-      "River tiles cannot be entered without a dedicated jump rule."
-    );
-  }
+  assertMovePathEnterable(match, movePath);
 
   let nextMatch = updatePlayer(match, {
     ...player,

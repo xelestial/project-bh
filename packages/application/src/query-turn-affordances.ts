@@ -4,6 +4,7 @@ import {
   endTurn,
   moveActivePlayer,
   movePosition,
+  movePositionByDistance,
   openCarriedTreasure,
   throwTile,
   useSpecialCard,
@@ -19,6 +20,7 @@ import { listLegalNormalRotationOrigins } from "./rotation-candidates.ts";
 const CARDINAL_DIRECTIONS: readonly Direction[] = ["north", "east", "south", "west"];
 const ROTATION_DIRECTIONS = ["clockwise", "counterclockwise"] as const;
 const RECTANGLE_ORIENTATIONS = ["horizontal", "vertical"] as const;
+const SECONDARY_MOVE_DISTANCE = 2;
 
 export interface TurnAffordances {
   readonly active: boolean;
@@ -97,12 +99,17 @@ function collectLegalMoveTargets(
     return [];
   }
 
+  const moveDistance =
+    match.round.turn?.playerId === playerId && match.round.turn.stage === "secondaryAction"
+      ? SECONDARY_MOVE_DISTANCE
+      : 1;
+
   return CARDINAL_DIRECTIONS.flatMap((direction) => {
     if (!tryCommand(() => moveActivePlayer(match, playerId, direction))) {
       return [];
     }
 
-    return [movePosition(player.position, direction)];
+    return [movePositionByDistance(player.position, direction, moveDistance)];
   });
 }
 

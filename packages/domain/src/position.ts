@@ -21,11 +21,19 @@ export function isWithinBoard(position: Position): boolean {
 }
 
 export function movePosition(position: Position, direction: Direction): Position {
+  return movePositionByDistance(position, direction, 1);
+}
+
+export function movePositionByDistance(
+  position: Position,
+  direction: Direction,
+  distance: number
+): Position {
   const vector = DIRECTION_VECTORS[direction];
 
   return {
-    x: position.x + vector.x,
-    y: position.y + vector.y
+    x: position.x + vector.x * distance,
+    y: position.y + vector.y * distance
   };
 }
 

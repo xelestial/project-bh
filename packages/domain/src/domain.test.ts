@@ -178,7 +178,7 @@ test("the mandatory step must complete before the turn can be ended", () => {
   });
 });
 
-test("the secondary step may be spent on one additional move and then ends the turn", () => {
+test("the secondary action may be spent on a two-tile straight move and then ends the turn", () => {
   const match = createTwoPlayerMatchFixture({
     treasures: []
   });
@@ -186,7 +186,7 @@ test("the secondary step may be spent on one additional move and then ends the t
   const result = moveActivePlayer(stepped, "player-1", "east");
   const movedPlayer = mustPlayer(result.state, "player-1");
 
-  assert.deepEqual(movedPlayer.position, createPosition(1, 1));
+  assert.deepEqual(movedPlayer.position, createPosition(2, 1));
   assert.equal(result.state.round.activePlayerId, "player-2");
   assert.deepEqual(
     result.events.map((event) => event.type),
