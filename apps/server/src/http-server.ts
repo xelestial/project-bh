@@ -3,16 +3,35 @@ import { randomUUID } from "node:crypto";
 import { URL } from "node:url";
 
 import { WebSocketServer, type WebSocket } from "ws";
+import { createClient } from "redis";
 
 import {
+  createMatchState,
   type CreateMatchStateInput
 } from "../../../packages/domain/src/index.ts";
 import { queryCellActions } from "../../../packages/application/src/index.ts";
-import { type PendingCellAction, validateActionQueryRequest } from "../../../packages/protocol/src/index.ts";
+import {
+  type PendingCellAction,
+  validateActionQueryRequest,
+  validateMatchCommand
+} from "../../../packages/protocol/src/index.ts";
 import { projectSnapshotForPlayer } from "./client-state-projector.ts";
-import { createServerCompositionRoot, type MatchSessionSnapshot } from "./index.ts";
+import { type MatchSessionSnapshot } from "./index.ts";
+import { createEngineWorker } from "./engine-worker.ts";
 import { createMatchInputFromConfig } from "./match-config-creator.ts";
 import { resolveHttpServerRuntimeConfig } from "./runtime-config.ts";
+import { createInMemoryRuntimeStore } from "./runtime/in-memory-runtime-store.ts";
+import { createRedisRuntimeStore } from "./runtime/redis-runtime-store.ts";
+import type {
+  CommandEnvelope,
+  MatchSnapshotRecord,
+  RoomRecord,
+  RuntimeStore
+} from "./runtime/ports.ts";
+import {
+  createSessionToken,
+  hashSessionToken
+} from "./security/session-token.ts";
 import { resolveClientTreasureId } from "./treasure-client-ids.ts";
 
 type RoomStatus = "lobby" | "started";
@@ -27,7 +46,7 @@ interface RoomPlayer {
 
 interface RoomPlayerSession {
   readonly playerId: string;
-  readonly sessionToken: string;
+  readonly tokenHash: string;
 }
 
 interface RoomState {
@@ -168,6 +187,8 @@ function translateTreasureReferencesForPendingAction(
 interface StartHttpServerOptions {
   readonly port?: number;
   readonly host?: string;
+  readonly runtimeStore?: RuntimeStore;
+  readonly sessionTokenSecret?: string;
 }
 
 function toRoomState(room: MutableRoom): RoomState {
@@ -184,14 +205,43 @@ function toRoomState(room: MutableRoom): RoomState {
   };
 }
 
+function toRoomRecord(room: MutableRoom): RoomRecord {
+  return {
+    roomId: room.roomId,
+    inviteCode: room.inviteCode,
+    roomName: room.roomName,
+    visibility: room.visibility,
+    hostPlayerId: room.hostPlayerId,
+    desiredPlayerCount: room.desiredPlayerCount,
+    createdAt: room.createdAt,
+    players: room.players,
+    status: room.status,
+    sessionId: room.sessionId
+  };
+}
+
+function toMatchSessionSnapshot(record: MatchSnapshotRecord): MatchSessionSnapshot {
+  return {
+    sessionId: record.sessionId,
+    state: record.state,
+    logLength: record.logLength
+  };
+}
+
 function buildMatchInput(room: MutableRoom): CreateMatchStateInput {
   return createMatchInputFromConfig(room.roomId, room.players);
 }
 
-function createPlayerSession(playerId: string): RoomPlayerSession {
+function createPlayerSession(
+  playerId: string,
+  sessionTokenSecret: string
+): RoomPlayerSession & { readonly sessionToken: string } {
+  const sessionToken = createSessionToken();
+
   return {
     playerId,
-    sessionToken: randomUUID()
+    sessionToken,
+    tokenHash: hashSessionToken(sessionToken, sessionTokenSecret)
   };
 }
 
@@ -224,7 +274,9 @@ function writeJson(
 export async function startHttpServer(options: StartHttpServerOptions = {}) {
   const port = options.port ?? 8787;
   const host = options.host ?? "127.0.0.1";
-  const engine = createServerCompositionRoot();
+  const runtimeStore = options.runtimeStore ?? createInMemoryRuntimeStore();
+  const engineWorker = createEngineWorker({ store: runtimeStore });
+  const sessionTokenSecret = options.sessionTokenSecret ?? "project-bh-local-session-secret";
   const rooms = new Map<string, MutableRoom>();
   const websocketServer = new WebSocketServer({ noServer: true });
 
@@ -276,7 +328,36 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
     }
   }
 
-  function broadcastRoom(roomId: string): void {
+  async function saveRoom(room: MutableRoom): Promise<void> {
+    await runtimeStore.rooms.save(toRoomRecord(room));
+  }
+
+  async function savePlayerSession(
+    room: MutableRoom,
+    session: RoomPlayerSession
+  ): Promise<void> {
+    await runtimeStore.sessions.save({
+      tokenHash: session.tokenHash,
+      roomId: room.roomId,
+      playerId: session.playerId,
+      clientInstanceId: session.playerId,
+      issuedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString(),
+      revokedAt: null
+    });
+  }
+
+  async function getMatchSnapshot(sessionId: string): Promise<MatchSessionSnapshot> {
+    const snapshot = await runtimeStore.matches.getSnapshot(sessionId);
+
+    if (!snapshot) {
+      throw new Error(`Unknown session: ${sessionId}`);
+    }
+
+    return toMatchSessionSnapshot(snapshot);
+  }
+
+  async function broadcastRoom(roomId: string): Promise<void> {
     const room = rooms.get(roomId);
 
     if (!room) {
@@ -284,11 +365,11 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
     }
 
     for (const [playerId, sockets] of room.sockets.entries()) {
+      const snapshot = room.sessionId ? await getMatchSnapshot(room.sessionId) : null;
       const payload = JSON.stringify({
         type: "room.updated",
         room: toRoomState(room),
-        snapshot:
-          room.sessionId ? projectSnapshotForPlayer(engine.getSnapshot(room.sessionId), playerId) : null
+        snapshot: snapshot ? projectSnapshotForPlayer(snapshot, playerId) : null
       });
 
       for (const socket of sockets) {
@@ -314,7 +395,7 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
       return null;
     }
 
-    return room.playerSessions.get(sessionToken) ?? null;
+    return room.playerSessions.get(hashSessionToken(sessionToken, sessionTokenSecret)) ?? null;
   }
 
   function assertPlayerSession(room: MutableRoom, sessionToken: string | null): RoomPlayerSession {
@@ -370,7 +451,7 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
 
         const roomId = randomUUID().slice(0, 8);
         const hostPlayerId = randomUUID().slice(0, 8);
-        const hostPlayerSession = createPlayerSession(hostPlayerId);
+        const hostPlayerSession = createPlayerSession(hostPlayerId, sessionTokenSecret);
         const roomName = body.roomName?.trim() ? body.roomName.trim() : `${body.name.trim()}'s party`;
         const room: MutableRoom = {
           roomId,
@@ -384,9 +465,11 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
           status: "lobby",
           sessionId: null,
           sockets: new Map(),
-          playerSessions: new Map([[hostPlayerSession.sessionToken, hostPlayerSession]])
+          playerSessions: new Map([[hostPlayerSession.tokenHash, hostPlayerSession]])
         };
         rooms.set(roomId, room);
+        await saveRoom(room);
+        await savePlayerSession(room, hostPlayerSession);
         writeJson(response, 201, {
           room: toRoomState(room),
           playerId: hostPlayerId,
@@ -458,10 +541,12 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
       }
 
       const playerId = randomUUID().slice(0, 8);
-      const playerSession = createPlayerSession(playerId);
+      const playerSession = createPlayerSession(playerId, sessionTokenSecret);
       room.players.push({ id: playerId, name: body.name });
-      room.playerSessions.set(playerSession.sessionToken, playerSession);
-      broadcastRoom(room.roomId);
+      room.playerSessions.set(playerSession.tokenHash, playerSession);
+      await saveRoom(room);
+      await savePlayerSession(room, playerSession);
+      await broadcastRoom(room.roomId);
       writeJson(response, 200, {
         room: toRoomState(room),
         playerId,
@@ -497,10 +582,12 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
       }
 
       const playerId = randomUUID().slice(0, 8);
-      const playerSession = createPlayerSession(playerId);
+      const playerSession = createPlayerSession(playerId, sessionTokenSecret);
       room.players.push({ id: playerId, name: body.name });
-      room.playerSessions.set(playerSession.sessionToken, playerSession);
-      broadcastRoom(roomId);
+      room.playerSessions.set(playerSession.tokenHash, playerSession);
+      await saveRoom(room);
+      await savePlayerSession(room, playerSession);
+      await broadcastRoom(roomId);
       writeJson(response, 200, {
         room: toRoomState(room),
         playerId,
@@ -542,7 +629,12 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
 
       try {
         matchInput = buildMatchInput(room);
-        engine.createSession(nextSessionId, matchInput);
+        await runtimeStore.matches.saveSnapshot({
+          sessionId: nextSessionId,
+          state: createMatchState(matchInput),
+          logLength: 0,
+          revision: 0
+        });
       } catch (error) {
         writeJson(response, 400, {
           error: error instanceof Error ? error.message : "Unable to start the room."
@@ -552,10 +644,14 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
 
       room.status = "started";
       room.sessionId = nextSessionId;
-      broadcastRoom(roomId);
+      await saveRoom(room);
+      await broadcastRoom(roomId);
       writeJson(response, 200, {
         room: toRoomState(room),
-        snapshot: projectSnapshotForPlayer(engine.getSnapshot(room.sessionId), playerSession.playerId)
+        snapshot: projectSnapshotForPlayer(
+          await getMatchSnapshot(room.sessionId),
+          playerSession.playerId
+        )
       });
       return;
     }
@@ -580,7 +676,10 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
         room: toRoomState(room),
         snapshot:
           room.sessionId && playerSession
-            ? projectSnapshotForPlayer(engine.getSnapshot(room.sessionId), playerSession.playerId)
+            ? projectSnapshotForPlayer(
+                await getMatchSnapshot(room.sessionId),
+                playerSession.playerId
+              )
             : null
       });
       return;
@@ -609,7 +708,7 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
         return;
       }
 
-      const snapshot = engine.getSnapshot(room.sessionId);
+      const snapshot = await getMatchSnapshot(room.sessionId);
       const playerSession = assertPlayerSession(room, validation.value.sessionToken);
       const actions = queryCellActions(
         snapshot.state,
@@ -640,7 +739,7 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
       }
 
       const payload = await readJson<unknown>(request);
-      const snapshot = engine.getSnapshot(room.sessionId);
+      const snapshot = await getMatchSnapshot(room.sessionId);
       if (
         typeof payload !== "object" ||
         payload === null ||
@@ -660,11 +759,41 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
               playerId: playerSession.playerId
             }
           : translatedPayload;
-      const result = engine.dispatchRawCommand(room.sessionId, authoritativePayload);
-      broadcastRoom(roomId);
+      const validation = validateMatchCommand(authoritativePayload);
+
+      if (!validation.ok) {
+        writeJson(response, 200, {
+          state: snapshot.state,
+          events: [],
+          rejection: {
+            code: "PROTOCOL_VALIDATION_FAILED",
+            message: validation.message
+          },
+          snapshot: projectSnapshotForPlayer(snapshot, playerSession.playerId)
+        });
+        return;
+      }
+
+      const commandEnvelope: CommandEnvelope = {
+        commandId:
+          "commandId" in payload && typeof payload.commandId === "string"
+            ? payload.commandId
+            : randomUUID(),
+        roomId,
+        playerId: playerSession.playerId,
+        receivedAt: new Date().toISOString(),
+        payload: validation.value
+      };
+      await runtimeStore.streams.appendCommand(room.sessionId, commandEnvelope);
+      const event = await engineWorker.processCommandEnvelope(
+        room.sessionId,
+        commandEnvelope
+      );
+      const nextSnapshot = await getMatchSnapshot(room.sessionId);
+      await broadcastRoom(roomId);
       writeJson(response, 200, {
-        ...result,
-        snapshot: projectSnapshotForPlayer(engine.getSnapshot(room.sessionId), playerSession.playerId)
+        ...event.result,
+        snapshot: projectSnapshotForPlayer(nextSnapshot, playerSession.playerId)
         });
         return;
       }
@@ -700,7 +829,7 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
     const sockets = room.sockets.get(playerId) ?? new Set<WebSocket>();
     sockets.add(socket);
     room.sockets.set(playerId, sockets);
-    broadcastRoom(roomId);
+    void broadcastRoom(roomId);
 
     socket.on("close", () => {
       const current = room.sockets.get(playerId);
@@ -802,7 +931,23 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const { port, host } = resolveHttpServerRuntimeConfig();
-  const server = await startHttpServer({ port, host });
+  const config = resolveHttpServerRuntimeConfig();
+  const redisClient =
+    config.runtimeStore === "redis"
+      ? createClient({ url: config.redisUrl! })
+      : null;
+
+  if (redisClient) {
+    await redisClient.connect();
+  }
+
+  const server = await startHttpServer({
+    port: config.port,
+    host: config.host,
+    ...(redisClient
+      ? { runtimeStore: createRedisRuntimeStore({ client: redisClient }) }
+      : {}),
+    sessionTokenSecret: config.sessionTokenSecret
+  });
   console.log(`Project.BH server listening on http://${server.host}:${server.port}`);
 }

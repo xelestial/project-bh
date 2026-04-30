@@ -404,3 +404,98 @@ test("http server lists only public joinable lobby rooms and supports players so
     await server.close();
   }
 });
+
+test("command endpoint queues commands with resolved player identity and idempotency", async (context) => {
+  let server;
+
+  try {
+    server = await startHttpServer({ port: 0, host: "127.0.0.1" });
+  } catch (error) {
+    if (isListenPermissionError(error)) {
+      context.skip("Sandbox blocks local port binding; run this test in a normal local shell.");
+      return;
+    }
+
+    throw error;
+  }
+
+  const baseUrl = `http://${server.host}:${server.port}`;
+
+  try {
+    const createRoom = await fetch(`${baseUrl}/api/rooms`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        name: "Host",
+        playerCount: 2
+      })
+    });
+    const host = (await createRoom.json()) as RoomResponse;
+
+    const joinRoom = await fetch(`${baseUrl}/api/invite/${host.room.inviteCode}/join`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        name: "Guest"
+      })
+    });
+    const guest = (await joinRoom.json()) as RoomResponse;
+
+    const startRoom = await fetch(`${baseUrl}/api/rooms/${host.room.roomId}/start`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        sessionToken: host.sessionToken
+      })
+    });
+    const started = (await startRoom.json()) as {
+      readonly snapshot: ProjectedMatchSnapshot;
+    };
+
+    const commandBody = {
+      commandId: "http-command-1",
+      sessionToken: host.sessionToken,
+      type: "match.submitAuctionBids",
+      version: 1,
+      matchId: started.snapshot.state.matchId,
+      playerId: guest.playerId,
+      bids: [{ offerSlot: started.snapshot.state.round.auction.currentOffer?.slot ?? 0, amount: 0 }]
+    };
+
+    const command = await fetch(`${baseUrl}/api/rooms/${host.room.roomId}/commands`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(commandBody)
+    });
+
+    assert.equal(command.status, 200);
+    const payload = (await command.json()) as {
+      readonly snapshot: ProjectedMatchSnapshot;
+    };
+    assert.equal(payload.snapshot.viewer.playerId, host.playerId);
+    assert.equal(payload.snapshot.logLength, 1);
+
+    const replay = await fetch(`${baseUrl}/api/rooms/${host.room.roomId}/commands`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(commandBody)
+    });
+    assert.equal(replay.status, 200);
+    const replayPayload = (await replay.json()) as {
+      readonly snapshot: ProjectedMatchSnapshot;
+    };
+    assert.equal(replayPayload.snapshot.logLength, 1);
+  } finally {
+    await server.close();
+  }
+});
