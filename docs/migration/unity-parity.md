@@ -26,7 +26,7 @@ The first parity targets should be:
 8. round completion after the fourth opened treasure
 9. next-round preparation with persistent HP, persistent elimination, and persistent non-treasure board state
 10. final match result calculation excluding eliminated players
-11. selector envelopes such as `match.snapshotBundle.v1`
+11. selector envelopes such as `match.publicState.v1`, `match.viewerPrivate.v1`, `match.turnHints.v1`, and the compatibility bundle `match.snapshotBundle.v1`
 12. command envelopes with backend-resolved player identity and idempotent `commandId` handling
 
 ## Expected future parity assets
@@ -37,6 +37,7 @@ The first parity targets should be:
 - auction and special-card scenario fixtures
 - charged-inventory projection samples for the player HUD
 - protocol snapshot samples
+- granular selector payload samples for public state, viewer-private state, and turn hints
 - server rejection catalogs
 - player-private treasure projection samples for Unity client parity checks
 - secure reconnect/session-token samples so Unity can match the same transport-auth contract without trusting public player ids

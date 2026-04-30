@@ -188,6 +188,15 @@ This lets the web shell support:
 - Frontend-facing match data is exposed through a selector registry. The current React-compatible bundle is `match.snapshotBundle.v1`.
 - Selector envelopes include `selectorId`, `version`, `revision`, and `payload`.
 - Selector envelopes are validated in `packages/protocol`, and raw `MatchState` is not sent as the frontend contract.
+- Granular selector contracts are now defined alongside the compatibility bundle:
+  - `match.publicState.v1`
+    - shared board, public player summaries, public treasure token data, round status, and auction status excluding viewer-only submission state
+  - `match.viewerPrivate.v1`
+    - the authenticated viewer's private player data, treasure placement hand, revealed treasure cards, and viewer-only auction submission state
+  - `match.turnHints.v1`
+    - authoritative affordances for the authenticated viewer's available actions
+  - `match.snapshotBundle.v1`
+    - compatibility envelope composed from the three smaller selector payloads for the React shell
 - The server uses the same player-specific projection rules for both:
   - `GET /api/rooms/:roomId?playerId=...`
   - websocket `room.updated` payloads for started rooms

@@ -1,6 +1,13 @@
 export const MATCH_SNAPSHOT_BUNDLE_SELECTOR_ID = "match.snapshotBundle.v1";
+export const MATCH_PUBLIC_STATE_SELECTOR_ID = "match.publicState.v1";
+export const MATCH_VIEWER_PRIVATE_SELECTOR_ID = "match.viewerPrivate.v1";
+export const MATCH_TURN_HINTS_SELECTOR_ID = "match.turnHints.v1";
 
-export type SelectorId = typeof MATCH_SNAPSHOT_BUNDLE_SELECTOR_ID;
+export type SelectorId =
+  | typeof MATCH_SNAPSHOT_BUNDLE_SELECTOR_ID
+  | typeof MATCH_PUBLIC_STATE_SELECTOR_ID
+  | typeof MATCH_VIEWER_PRIVATE_SELECTOR_ID
+  | typeof MATCH_TURN_HINTS_SELECTOR_ID;
 
 export interface SelectorEnvelope<TPayload = unknown> {
   readonly selectorId: SelectorId;
@@ -23,7 +30,12 @@ export type SelectorValidationResult<TValue> =
   | SelectorValidationFailure
   | SelectorValidationSuccess<TValue>;
 
-const SELECTOR_IDS = new Set<string>([MATCH_SNAPSHOT_BUNDLE_SELECTOR_ID]);
+const SELECTOR_IDS = new Set<string>([
+  MATCH_SNAPSHOT_BUNDLE_SELECTOR_ID,
+  MATCH_PUBLIC_STATE_SELECTOR_ID,
+  MATCH_VIEWER_PRIVATE_SELECTOR_ID,
+  MATCH_TURN_HINTS_SELECTOR_ID
+]);
 const ENVELOPE_FIELDS = new Set(["selectorId", "version", "revision", "payload"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {

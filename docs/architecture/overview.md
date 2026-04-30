@@ -66,6 +66,7 @@ The current baseline now covers:
 - Redis runtime adapter that stores canonical JSON records and uses Redis Streams for command/event transport
 - authoritative engine worker that applies queued command envelopes through `packages/application` and writes canonical snapshots/events
 - online-game benchmark harness for many rooms, players, commands, and optional WebSocket clients
+- granular selector contracts for `publicState`, `viewerPrivate`, and `turnHints`, with the existing React snapshot bundle composed from those smaller contracts
 - explicit public/private snapshot boundaries
   - public state contains only shared board, round, score, and occupancy data
   - viewer state contains private inventory, hand, and opened-treasure details for one player only
@@ -75,8 +76,8 @@ The current baseline now covers:
 ## Near-term build order
 
 1. Wire production deployment to `RUNTIME_STORE=redis` with `REDIS_URL`, `SESSION_TOKEN_SECRET`, and explicit `CORS_ALLOWED_ORIGINS`.
-2. Deepen selector schemas from the current snapshot bundle into smaller public/viewer selector contracts.
-3. Add Redis-backed reconnect and multi-process fanout tests once a shared Redis instance is available in CI.
+2. Add Redis-backed reconnect and multi-process fanout tests once a shared Redis instance is available in CI.
+3. Add selector payload golden samples for React and future Unity parity tests.
 4. Deepen scenario coverage for remaining ambiguous rule interactions.
 5. Expand replay export into a durable external contract.
 

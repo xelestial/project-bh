@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  MATCH_PUBLIC_STATE_SELECTOR_ID,
   MATCH_SNAPSHOT_BUNDLE_SELECTOR_ID,
+  MATCH_TURN_HINTS_SELECTOR_ID,
+  MATCH_VIEWER_PRIVATE_SELECTOR_ID,
   validateSelectorEnvelope
 } from "./selector-schema.ts";
 
@@ -55,4 +58,21 @@ test("selector envelope rejects unknown selectors", () => {
 
   assert.equal(result.ok, false);
   assert.match(result.message, /Unknown selector/);
+});
+
+test("selector envelope accepts granular match selectors", () => {
+  for (const selectorId of [
+    MATCH_PUBLIC_STATE_SELECTOR_ID,
+    MATCH_VIEWER_PRIVATE_SELECTOR_ID,
+    MATCH_TURN_HINTS_SELECTOR_ID
+  ]) {
+    const result = validateSelectorEnvelope({
+      selectorId,
+      version: 1,
+      revision: 3,
+      payload: {}
+    });
+
+    assert.equal(result.ok, true);
+  }
 });
