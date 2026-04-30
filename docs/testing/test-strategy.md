@@ -28,7 +28,8 @@ Current coverage includes:
 - large-hammer charged rotation
 - direct fence purchase during auction
 - recovery, jump, and hook special-card effects
-- next-round preparation and match completion
+- next-round preparation with persistent HP, persistent elimination, and persistent non-treasure board state
+- match completion that excludes eliminated players from winner calculation
 - application-layer rejection mapping
 - protocol payload validation
 - browser smoke coverage for host-create, guest-join, treasure placement, sequential auction reveal, and right-click movement query

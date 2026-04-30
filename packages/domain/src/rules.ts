@@ -620,7 +620,16 @@ function resolveThrownTileResult(targetKind: TileKind, thrownKind: TileKind): Ti
 }
 
 function computeMatchResult(match: MatchState): MatchResult {
-  const players = Object.values(match.players);
+  const players = Object.values(match.players).filter((player) => !player.eliminated);
+
+  if (players.length === 0) {
+    return {
+      winnerPlayerIds: [],
+      highestScore: 0,
+      tiedOpenedTreasureCount: 0
+    };
+  }
+
   const highestScore = players.reduce((max, player) => Math.max(max, player.score), 0);
   const highestScorePlayers = players.filter((player) => player.score === highestScore);
   const tiedOpenedTreasureCount = highestScorePlayers.reduce((max, player) => {
@@ -1964,8 +1973,6 @@ export function prepareNextRound(
     nextMatch = updatePlayer(nextMatch, {
       ...player,
       position: player.startPosition,
-      hitPoints: match.settings.startingHitPoints,
-      eliminated: false,
       carriedTreasureId: null,
       status: {
         fire: false,

@@ -22,7 +22,8 @@ The first parity targets should be:
 6. auction resolution, fence purchases, and charged special-card inventory updates
 7. square2 plus large-hammer cross5 and rectangle6 rotation transforms
 8. round completion after the fourth opened treasure
-9. next-round preparation and final match result calculation
+9. next-round preparation with persistent HP, persistent elimination, and persistent non-treasure board state
+10. final match result calculation excluding eliminated players
 
 ## Expected future parity assets
 

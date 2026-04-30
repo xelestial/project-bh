@@ -125,10 +125,14 @@ The current codebase implements the following rule-backed behavior.
   - `jump`: `3` uses
   - `hook`: `2` uses
 - Preparing the next round currently:
-  - resets HP, elimination, carry state, and temporary status state
+  - preserves board tile and fence state
+  - preserves each player's current HP
+  - preserves elimination state; eliminated players do not return in later rounds
+  - resets position, carry state, and temporary status state
   - keeps score, special-card inventory charges, and remaining priority hand state
   - resets treasures to an unplaced state for the next treasure-placement phase
 - At the end of round `5`, the match computes winners by:
+  - excluding eliminated players
   - highest total score
   - then highest opened treasure count
   - then shared victory
@@ -155,7 +159,7 @@ The following areas remain pending and should stay in the domain/application lay
   - equal bids break by lower seat index
 - The current auction model assumes sequential sealed bidding across the drawn offer queue plus direct `1`-point fence and `2`-point large-fence purchases before each player's current reveal is submitted.
 - Ice treasure-drop tie cases currently use a deterministic fallback ordering instead of interactive player choice.
-- Round reset currently preserves board tile and fence state unless later rules require a board reset between rounds.
+- Round reset currently preserves board tile and fence state, player HP, and player elimination state.
 - The current rotation model assumes the active player may target any legal selection on the board; only selection validity, player occupancy, and fence-boundary constraints can reject it.
 - Test fixtures may still place treasures directly outside the configured placement zone when they need focused domain coverage for older scenarios.
 - The current fake-card implementation assumes the fake card has no matching board slot or map token and therefore never produces an openable treasure token.

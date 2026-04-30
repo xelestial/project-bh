@@ -800,6 +800,73 @@ test("preparing the next round resets round state and eventually completes the m
   assert.ok(result.events.some((event) => event.type === "matchCompleted"));
 });
 
+test("preparing the next round preserves hit points, elimination, and non-treasure board state", () => {
+  const match = createTwoPlayerMatchFixture({
+    tiles: [{ position: createPosition(8, 8), kind: "fire" }]
+  });
+  const completedRound: MatchState = {
+    ...replacePlayer(
+      replacePlayer(match, "player-1", (player) => ({
+        ...player,
+        hitPoints: 4,
+        position: createPosition(3, 3),
+        carriedTreasureId: "treasure-1",
+        status: {
+          fire: true,
+          water: true,
+          skipNextTurnCount: 1,
+          movementLimit: 1
+        }
+      })),
+      "player-2",
+      (player) => ({
+        ...player,
+        hitPoints: 0,
+        eliminated: true,
+        position: createPosition(4, 4)
+      })
+    ),
+    board: {
+      ...match.board,
+      fences: {
+        "fence-a": {
+          id: "fence-a",
+          positions: [createPosition(8, 8), createPosition(8, 9)]
+        }
+      }
+    },
+    round: {
+      ...match.round,
+      roundNumber: 1,
+      phase: "completed",
+      activePlayerId: null,
+      turn: null
+    }
+  };
+
+  const result = prepareNextRound(completedRound);
+  const playerOne = mustPlayer(result.state, "player-1");
+  const playerTwo = mustPlayer(result.state, "player-2");
+
+  assert.equal(result.state.round.roundNumber, 2);
+  assert.equal(playerOne.hitPoints, 4);
+  assert.equal(playerTwo.hitPoints, 0);
+  assert.equal(playerTwo.eliminated, true);
+  assert.deepEqual(playerOne.position, playerOne.startPosition);
+  assert.equal(playerOne.carriedTreasureId, null);
+  assert.deepEqual(playerOne.status, {
+    fire: false,
+    water: false,
+    skipNextTurnCount: 0,
+    movementLimit: null
+  });
+  assert.equal(result.state.board.tiles["8,8"]?.kind, "fire");
+  assert.deepEqual(result.state.board.fences["fence-a"]?.positions, [
+    createPosition(8, 8),
+    createPosition(8, 9)
+  ]);
+});
+
 test("match completion picks 4-player winners by score then opened treasure count", () => {
   const started = createMatchState({
     matchId: "winner-resolution-match",
@@ -851,6 +918,46 @@ test("match completion picks 4-player winners by score then opened treasure coun
   assert.equal(result.state.result?.highestScore, 11);
   assert.equal(result.state.result?.tiedOpenedTreasureCount, 2);
   assert.ok(result.events.some((event) => event.type === "matchCompleted"));
+});
+
+test("match completion excludes eliminated players from winner calculation", () => {
+  const started = createMatchState({
+    matchId: "eliminated-winner-resolution-match",
+    players: [
+      { id: "player-1", name: "Alpha" },
+      { id: "player-2", name: "Bravo" }
+    ]
+  });
+  const completedRound: MatchState = {
+    ...started,
+    players: {
+      "player-1": {
+        ...started.players["player-1"]!,
+        score: 5,
+        openedTreasureIds: ["t1"]
+      },
+      "player-2": {
+        ...started.players["player-2"]!,
+        score: 99,
+        hitPoints: 0,
+        eliminated: true,
+        openedTreasureIds: ["t2", "t3"]
+      }
+    },
+    round: {
+      ...started.round,
+      roundNumber: 5,
+      phase: "completed",
+      activePlayerId: null,
+      turn: null
+    }
+  };
+
+  const result = prepareNextRound(completedRound);
+
+  assert.deepEqual(result.state.result?.winnerPlayerIds, ["player-1"]);
+  assert.equal(result.state.result?.highestScore, 5);
+  assert.equal(result.state.result?.tiedOpenedTreasureCount, 1);
 });
 
 test("the round completes when the fourth treasure is opened", () => {
