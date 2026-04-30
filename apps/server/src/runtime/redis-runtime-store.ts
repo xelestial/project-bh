@@ -1,6 +1,7 @@
 import type {
   CommandEnvelope,
   EventEnvelope,
+  IdempotencyRecord,
   MatchSnapshotRecord,
   PlayerSessionRecord,
   RoomRecord,
@@ -111,7 +112,9 @@ export function createRedisRuntimeStore(
     session: (tokenHash: string) => `${prefix}:session:${tokenHash}`,
     snapshot: (sessionId: string) => `${prefix}:match:${sessionId}:snapshot`,
     commands: (sessionId: string) => `${prefix}:match:${sessionId}:commands`,
-    events: (sessionId: string) => `${prefix}:match:${sessionId}:events`
+    events: (sessionId: string) => `${prefix}:match:${sessionId}:events`,
+    idempotency: (sessionId: string, commandId: string) =>
+      `${prefix}:match:${sessionId}:idempotency:${commandId}`
   };
 
   async function readRooms(): Promise<readonly RoomRecord[]> {
@@ -230,6 +233,19 @@ export function createRedisRuntimeStore(
         );
 
         return entries.map((entry) => decodeStreamEntry<EventEnvelope>(entry));
+      }
+    },
+    idempotency: {
+      async save(sessionId, record) {
+        await options.client.set(
+          keys.idempotency(sessionId, record.commandId),
+          encode(record)
+        );
+      },
+      async get(sessionId, commandId) {
+        return decode<IdempotencyRecord>(
+          await options.client.get(keys.idempotency(sessionId, commandId))
+        );
       }
     }
   };

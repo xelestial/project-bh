@@ -1,6 +1,7 @@
 import type {
   CommandEnvelope,
   EventEnvelope,
+  IdempotencyRecord,
   MatchSnapshotRecord,
   PlayerSessionRecord,
   RoomRecord,
@@ -41,6 +42,11 @@ export function createInMemoryRuntimeStore(): RuntimeStore {
   const snapshots = new Map<string, MatchSnapshotRecord>();
   const commandStreams = new Map<string, StreamEntry<CommandEnvelope>[]>();
   const eventStreams = new Map<string, StreamEntry<EventEnvelope>[]>();
+  const idempotencyRecords = new Map<string, IdempotencyRecord>();
+
+  function idempotencyKey(sessionId: string, commandId: string): string {
+    return `${sessionId}:${commandId}`;
+  }
 
   return {
     rooms: {
@@ -136,6 +142,18 @@ export function createInMemoryRuntimeStore(): RuntimeStore {
       async readEvents(sessionId, afterStreamId, count) {
         return readAfter(eventStreams.get(sessionId) ?? [], afterStreamId, count);
       }
+    },
+    idempotency: {
+      async save(sessionId, record) {
+        idempotencyRecords.set(
+          idempotencyKey(sessionId, record.commandId),
+          clone(record)
+        );
+      },
+      async get(sessionId, commandId) {
+        const record = idempotencyRecords.get(idempotencyKey(sessionId, commandId));
+        return record ? clone(record) : null;
+      }
     }
   };
 }
@@ -143,6 +161,7 @@ export function createInMemoryRuntimeStore(): RuntimeStore {
 export type {
   CommandEnvelope,
   EventEnvelope,
+  IdempotencyRecord,
   MatchSnapshotRecord,
   PlayerSessionRecord,
   RoomRecord,

@@ -59,6 +59,11 @@ export interface EventEnvelope {
   readonly revision: number;
 }
 
+export interface IdempotencyRecord {
+  readonly commandId: string;
+  readonly event: EventEnvelope;
+}
+
 export interface StreamEntry<TValue> {
   readonly streamId: string;
   readonly value: TValue;
@@ -100,9 +105,15 @@ export interface RuntimeStreams {
   ): Promise<readonly StreamEntry<EventEnvelope>[]>;
 }
 
+export interface IdempotencyRepository {
+  save(sessionId: string, record: IdempotencyRecord): Promise<void>;
+  get(sessionId: string, commandId: string): Promise<IdempotencyRecord | null>;
+}
+
 export interface RuntimeStore {
   readonly rooms: RoomRepository;
   readonly sessions: SessionRepository;
   readonly matches: MatchRepository;
   readonly streams: RuntimeStreams;
+  readonly idempotency: IdempotencyRepository;
 }
