@@ -1,0 +1,15 @@
+{
+  "name": "river blocks normal movement",
+  "input": {
+    "activePlayerId": "player-1",
+    "move": "south",
+    "riverPosition": {
+      "x": 0,
+      "y": 1
+    }
+  },
+  "output": {
+    "errorCode": "MOVEMENT_BLOCKED_BY_FENCE",
+    "message": "River tiles cannot be entered without a dedicated jump rule."
+  }
+}

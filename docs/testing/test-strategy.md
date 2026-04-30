@@ -40,6 +40,7 @@ Current coverage includes:
 - selector envelope tests for exact frontend payload boundaries
 - selector registry tests for public/viewer private-data separation
 - selector golden-sample tests that compare `docs/fixtures/selectors/*.json` with the stable two-player projection fixture
+- rule scenario golden-sample tests that compare `docs/fixtures/rules/*.json` with river and ice domain fixtures
 - secure session-token tests for entropy, HMAC hashing, constant-time verification, and redaction
 - runtime-store contract tests for room/session/snapshot/stream persistence
 - Redis runtime-store integration tests gated by `REDIS_URL`
@@ -109,7 +110,7 @@ BH_BENCH_ROOMS=100 BH_BENCH_PLAYERS=4 BH_BENCH_COMMANDS=1 pnpm benchmark:online
 ## Planned next layers
 
 1. Golden fixtures for cross5 and rectangle6 rotation examples.
-2. Scenario fixtures for river, ice drop, elimination, and round-tick status behavior.
+2. Scenario fixtures for elimination and round-tick status behavior.
 3. Redis-backed reconnect hydration and backend fanout tests with a shared Redis service in CI.
 4. Replay-oriented tests for full five-round command logs.
 5. UI component tests for the React playtest shell.

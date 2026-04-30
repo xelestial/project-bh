@@ -32,7 +32,7 @@ The first parity targets should be:
 ## Expected future parity assets
 
 - replay fixtures for full rounds
-- tile interaction golden cases
+- tile interaction golden cases, including river and ice samples in `docs/fixtures/rules/`
 - rotation golden cases
 - auction and special-card scenario fixtures
 - charged-inventory projection samples for the player HUD

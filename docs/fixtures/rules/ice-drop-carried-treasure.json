@@ -1,0 +1,31 @@
+{
+  "name": "ice drops carried treasure at a deterministic adjacent drop position",
+  "input": {
+    "activePlayerId": "player-1",
+    "move": "south",
+    "icePosition": {
+      "x": 0,
+      "y": 1
+    },
+    "carriedTreasureId": "treasure-ice"
+  },
+  "output": {
+    "playerPosition": {
+      "x": 0,
+      "y": 1
+    },
+    "carriedTreasureId": null,
+    "treasurePosition": {
+      "x": 1,
+      "y": 1
+    },
+    "treasureCarrier": null,
+    "activePlayerId": "player-1",
+    "turnStage": "secondaryAction",
+    "events": [
+      "playerMoved",
+      "treasureDropped",
+      "turnStageChanged"
+    ]
+  }
+}
