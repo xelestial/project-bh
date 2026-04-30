@@ -19,6 +19,11 @@ import { projectSnapshotForPlayer } from "./client-state-projector.ts";
 import { type MatchSessionSnapshot } from "./index.ts";
 import { createEngineWorker } from "./engine-worker.ts";
 import { createMatchInputFromConfig } from "./match-config-creator.ts";
+import { loadReconnectContext } from "./reconnect-hydration.ts";
+import {
+  createRuntimeEventFanout,
+  type RuntimeEventFanout
+} from "./runtime-event-fanout.ts";
 import { resolveHttpServerRuntimeConfig } from "./runtime-config.ts";
 import { createInMemoryRuntimeStore } from "./runtime/in-memory-runtime-store.ts";
 import { createRedisRuntimeStore } from "./runtime/redis-runtime-store.ts";
@@ -194,6 +199,8 @@ interface StartHttpServerOptions {
   readonly runtimeStore?: RuntimeStore;
   readonly sessionTokenSecret?: string;
   readonly corsAllowedOrigins?: readonly string[];
+  readonly backendInstanceId?: string;
+  readonly fanoutPollIntervalMs?: number | null;
   readonly rateLimits?: Partial<
     Record<RateLimitScope, { readonly limit: number; readonly windowMs: number }>
   >;
@@ -225,6 +232,23 @@ function toRoomRecord(room: MutableRoom): RoomRecord {
     players: room.players,
     status: room.status,
     sessionId: room.sessionId
+  };
+}
+
+function toMutableRoom(record: RoomRecord): MutableRoom {
+  return {
+    roomId: record.roomId,
+    inviteCode: record.inviteCode,
+    roomName: record.roomName,
+    visibility: record.visibility,
+    hostPlayerId: record.hostPlayerId,
+    desiredPlayerCount: record.desiredPlayerCount,
+    createdAt: record.createdAt,
+    players: [...record.players],
+    status: record.status,
+    sessionId: record.sessionId,
+    sockets: new Map(),
+    playerSessions: new Map()
   };
 }
 
@@ -284,8 +308,10 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
   const engineWorker = createEngineWorker({ store: runtimeStore });
   const sessionTokenSecret = options.sessionTokenSecret ?? "project-bh-local-session-secret";
   const corsAllowedOrigins = options.corsAllowedOrigins ?? [];
+  const backendInstanceId = options.backendInstanceId ?? randomUUID();
   const rateLimitOptions = options.rateLimits ?? {};
   const rooms = new Map<string, MutableRoom>();
+  const eventFanouts = new Map<string, RuntimeEventFanout>();
   const websocketServer = new WebSocketServer({ noServer: true });
 
   function createRateLimiter(scope: RateLimitScope) {
@@ -456,8 +482,71 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
     }
   }
 
-  function assertRoom(roomId: string): MutableRoom {
-    const room = rooms.get(roomId);
+  function getRuntimeEventFanout(sessionId: string): RuntimeEventFanout {
+    const existing = eventFanouts.get(sessionId);
+
+    if (existing) {
+      return existing;
+    }
+
+    const fanout = createRuntimeEventFanout({
+      store: runtimeStore,
+      sessionId,
+      consumerName: backendInstanceId,
+      onEvent: async (event) => {
+        await broadcastRoom(event.roomId);
+      }
+    });
+    eventFanouts.set(sessionId, fanout);
+    return fanout;
+  }
+
+  async function pollRuntimeEventFanout(): Promise<void> {
+    const startedSessionIds = new Set(
+      [...rooms.values()]
+        .map((room) => room.sessionId)
+        .filter((sessionId): sessionId is string => sessionId !== null)
+    );
+
+    for (const sessionId of startedSessionIds) {
+      await getRuntimeEventFanout(sessionId).poll();
+    }
+  }
+
+  function cacheRoomRecord(record: RoomRecord): MutableRoom {
+    const existing = rooms.get(record.roomId);
+
+    if (existing) {
+      existing.inviteCode = record.inviteCode;
+      existing.roomName = record.roomName;
+      existing.visibility = record.visibility;
+      existing.hostPlayerId = record.hostPlayerId;
+      existing.desiredPlayerCount = record.desiredPlayerCount;
+      existing.createdAt = record.createdAt;
+      existing.players = [...record.players];
+      existing.status = record.status;
+      existing.sessionId = record.sessionId;
+      return existing;
+    }
+
+    const room = toMutableRoom(record);
+    rooms.set(room.roomId, room);
+    return room;
+  }
+
+  async function getRoom(roomId: string): Promise<MutableRoom | null> {
+    const existing = rooms.get(roomId);
+
+    if (existing) {
+      return existing;
+    }
+
+    const record = await runtimeStore.rooms.get(roomId);
+    return record ? cacheRoomRecord(record) : null;
+  }
+
+  async function assertRoom(roomId: string): Promise<MutableRoom> {
+    const room = await getRoom(roomId);
 
     if (!room) {
       throw new Error(`Unknown room: ${roomId}`);
@@ -466,16 +555,47 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
     return room;
   }
 
-  function resolvePlayerSession(room: MutableRoom, sessionToken: string | null): RoomPlayerSession | null {
+  async function resolvePlayerSession(
+    room: MutableRoom,
+    sessionToken: string | null
+  ): Promise<RoomPlayerSession | null> {
     if (!sessionToken) {
       return null;
     }
 
-    return room.playerSessions.get(hashSessionToken(sessionToken, sessionTokenSecret)) ?? null;
+    const tokenHash = hashSessionToken(sessionToken, sessionTokenSecret);
+    const existing = room.playerSessions.get(tokenHash);
+
+    if (existing) {
+      return existing;
+    }
+
+    const reconnectContext = await loadReconnectContext({
+      store: runtimeStore,
+      roomId: room.roomId,
+      sessionToken,
+      sessionTokenSecret
+    });
+
+    if (!reconnectContext) {
+      return null;
+    }
+
+    cacheRoomRecord(reconnectContext.room);
+
+    const restoredSession = {
+      playerId: reconnectContext.session.playerId,
+      tokenHash: reconnectContext.tokenHash
+    };
+    room.playerSessions.set(reconnectContext.tokenHash, restoredSession);
+    return restoredSession;
   }
 
-  function assertPlayerSession(room: MutableRoom, sessionToken: string | null): RoomPlayerSession {
-    const playerSession = resolvePlayerSession(room, sessionToken);
+  async function assertPlayerSession(
+    room: MutableRoom,
+    sessionToken: string | null
+  ): Promise<RoomPlayerSession> {
+    const playerSession = await resolvePlayerSession(room, sessionToken);
 
     if (!playerSession) {
       throw new Error("Invalid player session.");
@@ -484,8 +604,16 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
     return playerSession;
   }
 
-  function findRoomByInviteCode(inviteCode: string): MutableRoom | undefined {
-    return [...rooms.values()].find((room) => room.inviteCode === inviteCode.toUpperCase());
+  async function findRoomByInviteCode(inviteCode: string): Promise<MutableRoom | null> {
+    const normalizedInviteCode = inviteCode.toUpperCase();
+    const existing = [...rooms.values()].find((room) => room.inviteCode === normalizedInviteCode);
+
+    if (existing) {
+      return existing;
+    }
+
+    const record = await runtimeStore.rooms.findByInviteCode(normalizedInviteCode);
+    return record ? cacheRoomRecord(record) : null;
   }
 
   const server = createServer(async (request, response) => {
@@ -570,7 +698,7 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
           return;
         }
 
-        const room = findRoomByInviteCode(inviteCode);
+        const room = await findRoomByInviteCode(inviteCode);
 
         if (!room) {
           writeJson(response, 404, { error: "Unknown invite code." });
@@ -604,7 +732,7 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
         return;
       }
 
-      const room = findRoomByInviteCode(inviteCode);
+      const room = await findRoomByInviteCode(inviteCode);
 
       if (!room) {
         writeJson(response, 404, { error: "Unknown invite code." });
@@ -655,7 +783,7 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
         return;
       }
 
-      const room = assertRoom(roomId);
+      const room = await assertRoom(roomId);
       const body = await readJson<JoinRoomRequest>(request);
 
       if (!body.name) {
@@ -696,10 +824,10 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
         return;
       }
 
-      const room = assertRoom(roomId);
+      const room = await assertRoom(roomId);
       const body = await readJson<StartRoomRequest>(request);
 
-      const playerSession = assertPlayerSession(room, body.sessionToken);
+      const playerSession = await assertPlayerSession(room, body.sessionToken);
 
       if (room.hostPlayerId !== playerSession.playerId) {
         writeJson(response, 403, { error: "Only the host can start the room." });
@@ -756,8 +884,8 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
         return;
       }
 
-      const room = assertRoom(roomId);
-      const playerSession = resolvePlayerSession(room, url.searchParams.get("sessionToken"));
+      const room = await assertRoom(roomId);
+      const playerSession = await resolvePlayerSession(room, url.searchParams.get("sessionToken"));
 
       if (url.searchParams.has("sessionToken") && !playerSession) {
         writeJson(response, 403, { error: "Invalid player session." });
@@ -789,7 +917,7 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
         return;
       }
 
-      const room = assertRoom(roomId);
+      const room = await assertRoom(roomId);
 
       if (!room.sessionId) {
         writeJson(response, 409, { error: "Room has not started." });
@@ -805,7 +933,7 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
       }
 
       const snapshot = await getMatchSnapshot(room.sessionId);
-      const playerSession = assertPlayerSession(room, validation.value.sessionToken);
+      const playerSession = await assertPlayerSession(room, validation.value.sessionToken);
       const actions = queryCellActions(
         snapshot.state,
         playerSession.playerId,
@@ -831,7 +959,7 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
         return;
       }
 
-      const room = assertRoom(roomId);
+      const room = await assertRoom(roomId);
 
       if (!room.sessionId) {
         writeJson(response, 409, { error: "Room has not started." });
@@ -850,7 +978,7 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
         return;
       }
 
-      const playerSession = assertPlayerSession(room, payload.sessionToken);
+      const playerSession = await assertPlayerSession(room, payload.sessionToken);
       const translatedPayload = translateTreasureReferencesForCommand(snapshot, payload);
       const authoritativePayload =
         typeof translatedPayload === "object" && translatedPayload !== null
@@ -973,13 +1101,13 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
     const roomId = url.searchParams.get("roomId");
     const sessionToken = url.searchParams.get("sessionToken");
 
-    if (!roomId || !sessionToken || !rooms.has(roomId)) {
+    if (!roomId || !sessionToken) {
       socket.destroy();
       return;
     }
 
-    const room = rooms.get(roomId);
-    const playerSession = room ? resolvePlayerSession(room, sessionToken) : null;
+    const room = await getRoom(roomId);
+    const playerSession = room ? await resolvePlayerSession(room, sessionToken) : null;
 
     if (!room || !playerSession) {
       socket.destroy();
@@ -996,6 +1124,28 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
       socket.destroy();
     });
   });
+
+  let fanoutPollInFlight = false;
+  const fanoutPollIntervalMs = options.fanoutPollIntervalMs ?? 250;
+  const fanoutPollTimer =
+    fanoutPollIntervalMs === null
+      ? null
+      : setInterval(() => {
+          if (fanoutPollInFlight) {
+            return;
+          }
+
+          fanoutPollInFlight = true;
+          void pollRuntimeEventFanout()
+            .catch(() => {
+              // The next poll will retry from the last persisted stream cursor.
+            })
+            .finally(() => {
+              fanoutPollInFlight = false;
+            });
+        }, fanoutPollIntervalMs);
+
+  fanoutPollTimer?.unref();
 
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
@@ -1015,6 +1165,10 @@ export async function startHttpServer(options: StartHttpServerOptions = {}) {
     port: address.port,
     host,
     close: async () => {
+      if (fanoutPollTimer) {
+        clearInterval(fanoutPollTimer);
+      }
+
       for (const room of rooms.values()) {
         for (const sockets of room.sockets.values()) {
           for (const socket of sockets) {

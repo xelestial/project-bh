@@ -114,7 +114,7 @@ export interface RateLimitCounterRepository {
   increment(key: string, windowExpiresAt: number): Promise<number>;
 }
 
-export interface EngineCursorRepository {
+export interface StreamCursorRepository {
   get(sessionId: string, consumerName: string): Promise<string | null>;
   save(
     sessionId: string,
@@ -130,5 +130,5 @@ export interface RuntimeStore {
   readonly streams: RuntimeStreams;
   readonly idempotency: IdempotencyRepository;
   readonly rateLimits: RateLimitCounterRepository;
-  readonly engineCursors: EngineCursorRepository;
+  readonly streamCursors: StreamCursorRepository;
 }

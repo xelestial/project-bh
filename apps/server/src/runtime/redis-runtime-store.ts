@@ -118,7 +118,7 @@ export function createRedisRuntimeStore(
     idempotency: (sessionId: string, commandId: string) =>
       `${prefix}:match:${sessionId}:idempotency:${commandId}`,
     rateLimit: (key: string) => `${prefix}:ratelimit:${key}`,
-    engineCursor: (sessionId: string, consumerName: string) =>
+    streamCursor: (sessionId: string, consumerName: string) =>
       `${prefix}:match:${sessionId}:cursor:${consumerName}`
   };
 
@@ -265,13 +265,13 @@ export function createRedisRuntimeStore(
         return count;
       }
     },
-    engineCursors: {
+    streamCursors: {
       async get(sessionId, consumerName) {
-        return options.client.get(keys.engineCursor(sessionId, consumerName));
+        return options.client.get(keys.streamCursor(sessionId, consumerName));
       },
       async save(sessionId, consumerName, streamId) {
         await options.client.set(
-          keys.engineCursor(sessionId, consumerName),
+          keys.streamCursor(sessionId, consumerName),
           streamId
         );
       }

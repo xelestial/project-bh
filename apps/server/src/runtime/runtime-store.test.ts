@@ -67,14 +67,14 @@ test("runtime store persists rooms, sessions, snapshots, and commands", async ()
   assert.equal((await store.streams.readCommands("session-room-1", "0-0", 10)).length, 1);
 });
 
-test("runtime store persists engine command cursors per consumer", async () => {
+test("runtime store persists stream cursors per consumer", async () => {
   const store = createInMemoryRuntimeStore();
 
-  assert.equal(await store.engineCursors.get("session-cursor", "engine-a"), null);
+  assert.equal(await store.streamCursors.get("session-cursor", "engine-a"), null);
 
-  await store.engineCursors.save("session-cursor", "engine-a", "2-0");
-  await store.engineCursors.save("session-cursor", "engine-b", "1-0");
+  await store.streamCursors.save("session-cursor", "engine-a", "2-0");
+  await store.streamCursors.save("session-cursor", "engine-b", "1-0");
 
-  assert.equal(await store.engineCursors.get("session-cursor", "engine-a"), "2-0");
-  assert.equal(await store.engineCursors.get("session-cursor", "engine-b"), "1-0");
+  assert.equal(await store.streamCursors.get("session-cursor", "engine-a"), "2-0");
+  assert.equal(await store.streamCursors.get("session-cursor", "engine-b"), "1-0");
 });

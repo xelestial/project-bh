@@ -103,7 +103,7 @@ export function createEngineWorker(options: EngineWorkerOptions): EngineWorker {
 
   async function processNextCommand(sessionId: string): Promise<boolean> {
     const afterStreamId =
-      (await options.store.engineCursors.get(sessionId, consumerName)) ?? "0-0";
+      (await options.store.streamCursors.get(sessionId, consumerName)) ?? "0-0";
     const [entry]: readonly StreamEntry<CommandEnvelope>[] =
       await options.store.streams.readCommands(sessionId, afterStreamId, 1);
 
@@ -112,7 +112,7 @@ export function createEngineWorker(options: EngineWorkerOptions): EngineWorker {
     }
 
     await processCommandEnvelope(sessionId, entry.value);
-    await options.store.engineCursors.save(
+    await options.store.streamCursors.save(
       sessionId,
       consumerName,
       entry.streamId

@@ -289,9 +289,13 @@ The runtime store defines these logical streams:
 - `bh:match:{sessionId}:events`
   - engine worker writes authoritative command results
 - `bh:match:{sessionId}:cursor:{consumerName}`
-  - engine worker stores the last processed command stream id for restart handoff
+  - engine workers and backend fanout pollers store the last processed stream id for restart handoff
 
-The in-memory adapter uses the same port contract for local tests. The Redis adapter serializes records as JSON, stores command/event history in Redis Streams, and stores engine cursors as small string records. Redis keys are prefixed so deployment environments can isolate Project. BH data.
+The in-memory adapter uses the same port contract for local tests. The Redis adapter serializes records as JSON, stores command/event history in Redis Streams, and stores stream cursors as small string records. Redis keys are prefixed so deployment environments can isolate Project. BH data.
+
+Backend instances may serve reconnect traffic even after a process restart or when the room was originally created by another backend instance. On cache miss, the gateway loads the room record and HMAC session record from the runtime store, verifies the token has not expired or been revoked, and then returns the normal selector-projected room snapshot. WebSocket upgrades use the same hydration path.
+
+For multi-process fanout, each backend instance has its own fanout consumer name. It polls authoritative event streams from Redis and broadcasts `room.updated` only to sockets currently attached to that process.
 
 ## Request protection
 

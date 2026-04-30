@@ -65,6 +65,8 @@ The current baseline now covers:
 - runtime-store ports for rooms, sessions, match snapshots, command streams, event streams, idempotency records, and rate-limit counters
 - Redis runtime adapter that stores canonical JSON records and uses Redis Streams for command/event transport
 - authoritative engine worker that applies queued command envelopes through `packages/application` and writes canonical snapshots/events
+- runtime-backed reconnect hydration so a backend with an empty local room cache can restore room/session context from Redis
+- backend event fanout poller that reads authoritative event streams with per-backend stream cursors
 - online-game benchmark harness for many rooms, players, commands, and optional WebSocket clients
 - granular selector contracts for `publicState`, `viewerPrivate`, and `turnHints`, with the existing React snapshot bundle composed from those smaller contracts
 - explicit public/private snapshot boundaries
@@ -93,6 +95,6 @@ Redis is infrastructure, not the rules engine. Domain and application packages s
 - engine-to-backend event streams
 - idempotency records keyed by command id
 - rate-limit counters
-- durable engine command cursors keyed by session and consumer name
+- durable stream cursors keyed by session and consumer name
 
-The HTTP/WebSocket process acts as a backend gateway. It authenticates a private `sessionToken`, injects the authoritative `playerId`, validates command payloads through `packages/protocol`, appends command envelopes, and returns selector-projected snapshots. The engine worker applies command envelopes through `handleMatchCommand`, persists the next canonical snapshot, writes event envelopes, and preserves idempotency for repeated `commandId` values.
+The HTTP/WebSocket process acts as a backend gateway. It authenticates a private `sessionToken`, injects the authoritative `playerId`, validates command payloads through `packages/protocol`, appends command envelopes, and returns selector-projected snapshots. If a backend instance has no local room cache, it can hydrate the room and player session from the runtime store before serving reconnect HTTP or WebSocket traffic. The engine worker applies command envelopes through `handleMatchCommand`, persists the next canonical snapshot, writes event envelopes, and preserves idempotency for repeated `commandId` values. Backend instances poll event streams with their own consumer names and broadcast fresh selector projections only to sockets connected to that process.
