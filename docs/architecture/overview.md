@@ -74,6 +74,7 @@ The current baseline now covers:
 - rotation golden samples in `docs/fixtures/rotations/` for large-hammer cross5 and rectangle6 parity checks
 - replay export schema and compact command-log samples in `docs/fixtures/replays/`
 - Unity parity asset catalog in `docs/fixtures/unity-parity/` that enumerates reusable selector, replay, rule, and rotation fixtures
+- browser-smoke CI workflow that runs the visual browser smoke path with `RUN_BROWSER_SMOKE=1`
 - explicit public/private snapshot boundaries
   - public state contains only shared board, round, score, and occupancy data
   - viewer state contains private inventory, hand, and opened-treasure details for one player only
@@ -82,7 +83,7 @@ The current baseline now covers:
 
 ## Near-term build order
 
-1. Add screenshot or pixel-based browser assertions once a stable CI browser runner is available.
+1. Keep the browser-smoke CI workflow stable as the GUI grows; every new critical board interaction should either extend `apps/web/src/gui-smoke.e2e.test.ts` or add a lower-level view-model assertion.
 2. Add resolved scenario fixtures for newly finalized special-card combinations as rules stabilize.
 
 The more detailed sequence now lives in `docs/planning/implementation-roadmap.md`.

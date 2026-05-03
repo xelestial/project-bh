@@ -52,6 +52,7 @@ Current coverage includes:
 - HTTP command tests proving backend-resolved player identity and repeated `commandId` idempotency
 - CORS and fixed-window rate-limit tests
 - online-game benchmark smoke coverage for room creation, joins, starts, and commands
+- browser-smoke CI coverage for the visual browser smoke path with `RUN_BROWSER_SMOKE=1` and an explicit Chrome binary
 
 ## Regression policy
 
@@ -89,6 +90,14 @@ REDIS_URL=redis://127.0.0.1:6379 pnpm test:redis-runtime
 
 The same Redis-backed runtime suite runs in `.github/workflows/redis-runtime.yml`.
 
+Run the browser smoke path locally with:
+
+```bash
+RUN_BROWSER_SMOKE=1 pnpm test:browser-smoke
+```
+
+The same visual smoke path runs in `.github/workflows/browser-smoke.yml`. The workflow pins `RUN_BROWSER_SMOKE=1`, checks the configured Chrome binary, builds the web app, and then runs `pnpm test:browser-smoke`.
+
 Run the online-game benchmark smoke test with:
 
 ```bash
@@ -125,5 +134,5 @@ The profile ids add stable metric tags and workload defaults for selector refres
 
 ## Planned next layers
 
-1. Add screenshot or pixel-based browser assertions once a stable CI browser runner is available.
+1. Extend the browser-smoke visual assertions when new critical GUI interactions are introduced.
 2. Add resolved scenario fixtures for newly finalized special-card combinations as rules stabilize.

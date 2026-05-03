@@ -69,7 +69,7 @@ Expected result:
 Run the browser smoke path when you want the shell to verify the room lifecycle and the current board-first GUI flow end to end:
 
 ```bash
-RUN_BROWSER_SMOKE=1 node --experimental-strip-types --test apps/web/src/gui-smoke.e2e.test.ts
+RUN_BROWSER_SMOKE=1 pnpm test:browser-smoke
 ```
 
 Expected result in a normal local shell:
@@ -84,6 +84,7 @@ Environment note:
 
 - the smoke test is opt-in and does not launch a local browser unless `RUN_BROWSER_SMOKE=1` is set
 - the smoke test skips itself if local port binding or Chrome headless debugging is blocked by the current sandbox
+- `.github/workflows/browser-smoke.yml` runs the same smoke path in CI with `RUN_BROWSER_SMOKE=1` and an explicit Chrome binary
 
 ## Port override examples
 

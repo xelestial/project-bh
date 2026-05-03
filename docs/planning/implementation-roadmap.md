@@ -51,11 +51,17 @@ Already implemented:
 - throwable fire, water, and electric tiles
 - fire, water, electric, ice, giant flame, and river baseline interactions
 - special-card use for bombs, hammers, and fences
+- charged special-card inventory plus recovery, jump, hook, and fence purchase flows
 - fence-aware movement and rotation legality
 - 4-tile, 5-tile, and 6-tile rotation transforms
 - round completion after the fourth opened treasure
 - next-round preparation and final match resolution
 - protocol validation baseline
+- granular selector contracts for public state, viewer-private state, turn hints, and snapshot bundles
+- replay export schema and five-round command-log fixture
+- Redis-backed runtime-store adapter, stream transport, reconnect hydration, engine worker, and event fanout
+- online-game benchmark profiles for selector latency, reconnect latency, and Redis stream throughput
+- CI coverage for Redis runtime integration and visual browser smoke
 - domain/application/protocol tests
 - server/session/reconnect baseline
 - local client adapter and view-model baseline
@@ -363,15 +369,15 @@ Goal:
 Make the game playable in the browser without moving rules into the client.
 
 Status:
-Partially completed as a local client adapter and view-model layer.
+Completed for the current playable browser-first prototype shell.
 
 Slices:
 
 1. lobby and room shell
 2. board renderer and HUD
 3. intent dispatch and reconciliation
-4. event-driven animation shell
-5. debug panel and replay viewer
+4. selector-driven private/public projection
+5. browser smoke coverage for the current critical GUI path
 
 Exit criteria:
 
@@ -386,9 +392,10 @@ Turn the implementation into a durable reference system for Unity and long-term 
 Slices:
 
 1. replay fixture catalog
-2. rule ambiguity ledger
-3. ADR set for critical architecture decisions
-4. parity-oriented scenario suites
+2. selector, rule, rotation, protocol, runtime, and scenario fixture catalogs
+3. parity-oriented scenario suites
+4. benchmark profiles for online-game scalability checks
+5. ADR set for future critical architecture decisions
 
 Exit criteria:
 
@@ -399,16 +406,16 @@ Exit criteria:
 
 The next recommended order is:
 
-1. Golden-fixture coverage for unresolved interaction and rotation edge cases
-2. Protocol snapshot schema and replay export format
-3. Real React UI shell over the local client adapter contract
-4. Persistence and richer room lifecycle management
+1. Keep browser-smoke CI reliable as the GUI expands.
+2. Add resolved scenario fixtures for any newly finalized special-card combinations.
+3. Add ADRs when an architecture decision changes protocol, runtime storage, replay compatibility, or Unity migration assumptions.
+4. Expand benchmark profiles only when a new online-game bottleneck or service topology needs a stable measurement.
 
 Reason:
 
-- the domain loop now exists end-to-end and benefits most from stronger parity fixtures
-- the current server is authoritative but still in-memory
-- the web side now has an adapter contract that a real UI can consume
+- the domain loop, Redis runtime, selector contracts, replay export, React shell, and current parity fixtures now exist end to end
+- the remaining near-term work is mostly operational hardening and fixture expansion as rules stabilize
+- new work should preserve the current server-authoritative, selector-projected, Unity-portable boundaries
 
 ## Working rule for future planning
 

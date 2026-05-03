@@ -1,0 +1,25 @@
+name: Browser Smoke
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  browser-smoke:
+    runs-on: ubuntu-latest
+    env:
+      RUN_BROWSER_SMOKE: "1"
+      CHROME_BIN: /usr/bin/google-chrome-stable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:web
+      - run: test -x "$CHROME_BIN"
+      - run: pnpm test:browser-smoke
